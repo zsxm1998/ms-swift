@@ -2,8 +2,8 @@
 CUDA_VISIBLE_DEVICES="0,1,2,3,4,5,6,7" \
 NPROC_PER_NODE=8 \
 swift sft \
-    --output_dir ./zsxm_checkpoint/icip/full/llava-llama3.1-8b_2412230-int_t-VAL_e-2 \
-    --model swift/llava-llama3.1-8b \
+    --output_dir ./zsxm_checkpoint/icip/full/llava-onevision-qwen2-7b-ov-hf_2412230-int_t-VAL_e-2 \
+    --model AI-ModelScope/llava-onevision-qwen2-7b-ov-hf \
     --deepspeed zero3 \
     --torch_dtype bfloat16 \
     --train_type full \
@@ -12,15 +12,18 @@ swift sft \
     --freeze_vit false \
     --freeze_aligner false \
     --dataset ./zsxm_dataset/icip/finetune/2412230_int_patho-instruct_patho-vision.json \
-    --max_length 4096 \
-    --max_pixels $((336*336)) \
-    --truncation_strategy right \
+              swift/self-cognition#1000 \
+    --max_length 8192 \
+    --max_pixels $((384*384)) \
+    --truncation_strategy delete \
     --num_train_epochs 2 \
-    --per_device_train_batch_size 4 \
-    --gradient_accumulation_steps 4 \
+    --per_device_train_batch_size 2 \
+    --gradient_accumulation_steps 8 \
     --learning_rate 2e-5 \
     --eval_strategy no \
     --save_strategy epoch \
     --save_total_limit 1 \
     --logging_steps 1 \
+    --model_author "VIPA实验室" "vipa-lab" \
+    --model_name "VIPA病理助手" "VIPA-Path-Assistant" \
     --use_hf false
