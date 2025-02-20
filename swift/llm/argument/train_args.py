@@ -1,5 +1,6 @@
 # Copyright (c) Alibaba, Inc. and its affiliates.
 import os
+import sys
 from dataclasses import dataclass, field
 from typing import List, Literal, Optional, Union
 
@@ -8,9 +9,10 @@ from transformers import Seq2SeqTrainingArguments
 from transformers.utils.versions import require_version
 
 from swift.plugin import LOSS_MAPPING
-from swift.trainers import IntervalStrategy, TrainerFactory
-from swift.utils import (add_version_to_work_dir, get_logger, get_pai_tensorboard_dir, is_liger_available,
-                         is_local_master, is_mp, is_pai_training_job, use_torchacc)
+from swift.trainers import TrainerFactory
+from swift.utils import (add_version_to_work_dir, get_device_count, get_logger, get_pai_tensorboard_dir,
+                         is_liger_available, is_local_master, is_mp, is_pai_training_job, is_swanlab_available,
+                         use_torchacc)
 from .base_args import BaseArguments, to_abspath
 from .tuner_args import TunerArguments
 
@@ -32,9 +34,9 @@ class Seq2SeqTrainingOverrideArguments(Seq2SeqTrainingArguments):
     lr_scheduler_kwargs: Optional[Union[dict, str]] = None
     gradient_checkpointing_kwargs: Optional[Union[dict, str]] = None
     report_to: List[str] = field(default_factory=lambda: ['tensorboard'])
-    remove_unused_columns: bool = False
-    logging_first_step: bool = True
     eval_strategy: Optional[str] = None  # steps, epoch
+
+    logging_first_step: bool = True
 
     def _init_output_dir(self):
         if self.output_dir is not None:
@@ -52,11 +54,14 @@ class Seq2SeqTrainingOverrideArguments(Seq2SeqTrainingArguments):
             self.eval_steps = self.save_steps
         self.evaluation_strategy = self.eval_strategy
 
-    def __post_init__(self):
-        self._init_output_dir()
+    def _init_metric_for_best_model(self):
         if self.metric_for_best_model is None:
             self.metric_for_best_model = 'rouge-l' if self.predict_with_generate else 'loss'
-        if self.greater_is_better is None:
+
+    def __post_init__(self):
+        self._init_output_dir()
+        self._init_metric_for_best_model()
+        if self.greater_is_better is None and self.metric_for_best_model is not None:
             self.greater_is_better = 'loss' not in self.metric_for_best_model
 
         if self.learning_rate is None:
@@ -69,6 +74,35 @@ class Seq2SeqTrainingOverrideArguments(Seq2SeqTrainingArguments):
         if getattr(self, 'gradient_checkpointing_kwargs', None):
             self.gradient_checkpointing_kwargs = self.parse_to_dict(self.gradient_checkpointing_kwargs)
         self._init_eval_strategy()
+
+
+@dataclass
+class SwanlabArguments:
+
+    swanlab_token: Optional[str] = None
+    swanlab_project: Optional[str] = None
+    swanlab_workspace: Optional[str] = None
+    swanlab_exp_name: Optional[str] = None
+    swanlab_mode: Literal['cloud', 'local'] = 'cloud'
+
+    def _init_swanlab(self):
+        if not is_swanlab_available():
+            raise ValueError('You are using swanlab as `report_to`, please install swanlab by ' '`pip install swanlab`')
+        if not self.swanlab_project:
+            raise ValueError('Please specify a project existed in your swanlab page(https://swanlab.cn/space/~)')
+        if not self.swanlab_exp_name:
+            self.swanlab_exp_name = self.output_dir
+        from transformers.integrations import INTEGRATION_TO_CALLBACK
+        import swanlab
+        from swanlab.integration.transformers import SwanLabCallback
+        if self.swanlab_token:
+            swanlab.login(self.swanlab_token)
+        INTEGRATION_TO_CALLBACK['swanlab'] = SwanLabCallback(
+            project=self.swanlab_project,
+            workspace=self.swanlab_workspace,
+            experiment_name=self.swanlab_exp_name,
+            mode=self.swanlab_mode,
+        )
 
 
 @dataclass
@@ -87,7 +121,8 @@ class TorchAccArguments:
 
 
 @dataclass
-class TrainArguments(TorchAccArguments, TunerArguments, Seq2SeqTrainingOverrideArguments, BaseArguments):
+class TrainArguments(SwanlabArguments, TorchAccArguments, TunerArguments, Seq2SeqTrainingOverrideArguments,
+                     BaseArguments):
     """
     TrainArguments class is a dataclass that inherits from multiple argument classes:
     TorchAccArguments, TunerArguments, Seq2SeqTrainingOverrideArguments, and BaseArguments.
@@ -108,18 +143,22 @@ class TrainArguments(TorchAccArguments, TunerArguments, Seq2SeqTrainingOverrideA
     add_version: bool = True
     resume_only_model: bool = False
     check_model: bool = True
-    loss_type: Optional[str] = field(default=None, metadata={'help': f'loss_func choices: {list(LOSS_MAPPING.keys())}'})
+    create_checkpoint_symlink: bool = False
 
     # dataset
     packing: bool = False
     lazy_tokenize: Optional[bool] = None
 
+    # plugin
+    external_plugins: List[str] = field(default_factory=list)
+    loss_type: Optional[str] = field(default=None, metadata={'help': f'loss_func choices: {list(LOSS_MAPPING.keys())}'})
+    optimizer: Optional[str] = None
+    metric: Optional[str] = None
+
     # extra
     acc_strategy: Literal['token', 'seq'] = 'token'
     max_new_tokens: int = 64
     temperature: float = 0.
-    optimizer: Optional[str] = None
-    metric: Optional[str] = None
 
     def __post_init__(self) -> None:
         if self.resume_from_checkpoint:
@@ -132,6 +171,12 @@ class TrainArguments(TorchAccArguments, TunerArguments, Seq2SeqTrainingOverrideA
         Seq2SeqTrainingOverrideArguments.__post_init__(self)
         TunerArguments.__post_init__(self)
         TorchAccArguments.__post_init__(self)
+
+        if self.optimizer is None:
+            if self.lorap_lr_ratio:
+                self.optimizer = 'lorap'
+            elif self.use_galore:
+                self.optimizer = 'galore'
 
         if len(self.dataset) == 0:
             raise ValueError(f'self.dataset: {self.dataset}, Please input the training dataset.')
@@ -152,19 +197,44 @@ class TrainArguments(TorchAccArguments, TunerArguments, Seq2SeqTrainingOverrideA
         if getattr(self, 'accelerator_config', None) is None:
             self.accelerator_config = {'dispatch_batches': False}
         self.training_args = TrainerFactory.get_training_args(self)
+        self.training_args.remove_unused_columns = False
 
         self._add_version()
+        self.import_plugin()
+
+        if 'swanlab' in self.report_to:
+            self._init_swanlab()
+
+    def import_plugin(self):
+        if not self.external_plugins:
+            return
+
+        for external_plugin in self.external_plugins:
+            py_dir = os.path.dirname(external_plugin)
+            assert os.path.isdir(py_dir)
+            py_file = os.path.basename(external_plugin)
+            sys.path.insert(0, py_dir)
+            try:
+                import importlib
+                importlib.import_module(py_file.split('.')[0])
+            except Exception:  # noqa
+                import traceback
+                logger.warn(f'⚠️⚠️⚠️Plugin {external_plugin} import failed.')
+                logger.warn(traceback.format_exc())
 
     def _init_deepspeed(self):
         if self.deepspeed:
             require_version('deepspeed')
             if is_mp():
                 raise ValueError('DeepSpeed is not compatible with MP. '
-                                 f'n_gpu: {torch.cuda.device_count()}, '
+                                 f'n_gpu: {get_device_count()}, '
                                  f'local_world_size: {self.local_world_size}.')
 
             ds_config_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'ds_config'))
-            deepspeed_mapping = {name: f'{name}.json' for name in ['zero2', 'zero3', 'zero2_offload', 'zero3_offload']}
+            deepspeed_mapping = {
+                name: f'{name}.json'
+                for name in ['zero0', 'zero1', 'zero2', 'zero3', 'zero2_offload', 'zero3_offload']
+            }
             for ds_name, ds_config in deepspeed_mapping.items():
                 if self.deepspeed == ds_name:
                     self.deepspeed = os.path.join(ds_config_folder, ds_config)

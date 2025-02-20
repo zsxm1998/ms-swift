@@ -4,18 +4,18 @@ import os
 import sys
 import time
 import typing
+from collections import OrderedDict
 from dataclasses import fields
 from datetime import datetime
 from functools import wraps
-from typing import Any, Dict, List, OrderedDict, Type
+from typing import Any, Dict, List, Type
 
 import gradio as gr
 import json
 from gradio import Accordion, Audio, Button, Checkbox, Dropdown, File, Image, Slider, Tab, TabItem, Textbox, Video
 from modelscope.hub.utils.utils import get_cache_dir
 
-from swift.llm import TEMPLATE_MAPPING, BaseArguments
-from swift.llm.model.register import get_matched_model_meta
+from swift.llm import TEMPLATE_MAPPING, BaseArguments, get_matched_model_meta
 
 all_langs = ['zh', 'en']
 builder: Type['BaseUI'] = None
@@ -103,7 +103,7 @@ class BaseUI:
         'local_dir_alert': {
             'value': {
                 'zh': '无法识别model_type和template,请手动选择',
-                'en': 'Cannot recognize the model_type and template, please choose manully'
+                'en': 'Cannot recognize the model_type and template, please choose manually'
             }
         },
     }
@@ -220,12 +220,12 @@ class BaseUI:
 
     @classmethod
     def valid_elements(cls):
+        valid_elements = OrderedDict()
         elements = cls.elements()
-        return {
-            key: value
-            for key, value in elements.items()
-            if isinstance(value, (Textbox, Dropdown, Slider, Checkbox)) and key != 'train_record'
-        }
+        for key, value in elements.items():
+            if isinstance(value, (Textbox, Dropdown, Slider, Checkbox)) and key != 'train_record':
+                valid_elements[key] = value
+        return valid_elements
 
     @classmethod
     def element_keys(cls):
@@ -292,6 +292,8 @@ class BaseUI:
     @classmethod
     def update_input_model(cls, model, allow_keys=None, has_record=True, arg_cls=BaseArguments, is_ref_model=False):
         keys = cls.valid_element_keys()
+        if allow_keys:
+            keys = [key for key in keys if key in allow_keys]
 
         if not model:
             ret = [gr.update()] * (len(keys) + int(has_record))
@@ -320,8 +322,6 @@ class BaseUI:
                 return [gr.update()] * (len(keys) + int(has_record))
             values = []
             for key in keys:
-                if allow_keys is not None and key not in allow_keys:
-                    continue
                 arg_value = getattr(args, key, None)
                 if arg_value and key != 'model':
                     if key in ('torch_dtype', 'bnb_4bit_compute_dtype'):
@@ -342,8 +342,6 @@ class BaseUI:
         else:
             values = []
             for key in keys:
-                if allow_keys is not None and key not in allow_keys:
-                    continue
                 if key not in ('template', 'model_type', 'ref_model_type', 'system'):
                     values.append(gr.update())
                 elif key in ('template', 'model_type', 'ref_model_type'):
@@ -370,7 +368,7 @@ class BaseUI:
             return [gr.update()] * len(cls.elements())
         cache = cls.load_cache(model, train_record)
         updates = []
-        for key, value in cls.valid_elements().items():
+        for key, value in base_tab.valid_elements().items():
             if key in cache:
                 updates.append(gr.update(value=cache[key]))
             else:

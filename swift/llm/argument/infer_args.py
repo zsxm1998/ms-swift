@@ -4,9 +4,10 @@ import os
 from dataclasses import dataclass
 from typing import Literal, Optional, Union
 
+import torch
 import torch.distributed as dist
+from transformers.utils import is_torch_npu_available
 
-from swift.llm import get_template_meta
 from swift.utils import get_logger, is_dist
 from .base_args import BaseArguments, to_abspath
 from .base_args.model_args import ModelArguments
@@ -60,6 +61,7 @@ class VllmArguments:
         enforce_eager (bool): Flag to enforce eager execution. Default is False.
         limit_mm_per_prompt (Optional[str]): Limit multimedia per prompt. Default is None.
         vllm_max_lora_rank (int): Maximum LoRA rank. Default is 16.
+        enable_prefix_caching (bool): Flag to enable automatic prefix caching. Default is False.
     """
     # vllm
     gpu_memory_utilization: float = 0.9
@@ -69,13 +71,17 @@ class VllmArguments:
     max_model_len: Optional[int] = None
     disable_custom_all_reduce: bool = False
     enforce_eager: bool = False
-    limit_mm_per_prompt: Optional[Union[dict, str]] = None  # '{"image": 10, "video": 5}'
+    limit_mm_per_prompt: Optional[Union[dict, str]] = None  # '{"image": 5, "video": 2}'
     vllm_max_lora_rank: int = 16
+    enable_prefix_caching: bool = False
 
     def __post_init__(self):
         self.limit_mm_per_prompt = ModelArguments.parse_to_dict(self.limit_mm_per_prompt)
 
     def get_vllm_engine_kwargs(self):
+        adapters = self.adapters
+        if hasattr(self, 'adapter_mapping'):
+            adapters = adapters + list(self.adapter_mapping.values())
         return {
             'gpu_memory_utilization': self.gpu_memory_utilization,
             'tensor_parallel_size': self.tensor_parallel_size,
@@ -86,8 +92,9 @@ class VllmArguments:
             'enforce_eager': self.enforce_eager,
             'limit_mm_per_prompt': self.limit_mm_per_prompt,
             'max_lora_rank': self.vllm_max_lora_rank,
-            'enable_lora': len(self.adapters) > 0,
-            'max_loras': max(len(self.adapters), 1),
+            'enable_lora': len(adapters) > 0,
+            'max_loras': max(len(adapters), 1),
+            'enable_prefix_caching': self.enable_prefix_caching,
         }
 
 
@@ -108,9 +115,10 @@ class InferArguments(MergeArguments, VllmArguments, LmdeployArguments, BaseArgum
     infer_backend: Literal['vllm', 'pt', 'lmdeploy'] = 'pt'
 
     result_path: Optional[str] = None
-    writer_buffer_size: int = 65536
+    metric: Literal['acc', 'rouge'] = None
     # for pt engine
     max_batch_size: int = 1
+    ddp_backend: Optional[str] = None
 
     # only for inference
     val_dataset_sample: Optional[int] = None
@@ -132,11 +140,9 @@ class InferArguments(MergeArguments, VllmArguments, LmdeployArguments, BaseArgum
     def _init_stream(self):
         self.eval_human = not (self.dataset and self.split_dataset_ratio > 0 or self.val_dataset)
 
-        if self.stream and self.template:
-            template_meta = get_template_meta(self.template)
-            if self.num_beams != 1 or not template_meta.support_stream:
-                self.stream = False
-                logger.info('Setting args.stream: False')
+        if self.stream and self.num_beams != 1:
+            self.stream = False
+            logger.info('Setting args.stream: False')
 
     def _init_pt_ddp(self):
         if self.infer_backend != 'pt' or not is_dist():
@@ -144,11 +150,17 @@ class InferArguments(MergeArguments, VllmArguments, LmdeployArguments, BaseArgum
         assert not self.eval_human and not self.stream
         self._init_device()
         if not dist.is_initialized():
-            dist.init_process_group(backend='nccl')
+            if self.ddp_backend is None:
+                if is_torch_npu_available():
+                    self.ddp_backend = 'hccl'
+                elif torch.cuda.is_available():
+                    self.ddp_backend = 'nccl'
+                else:
+                    self.ddp_backend = 'gloo'
+            dist.init_process_group(backend=self.ddp_backend)
 
     def __post_init__(self) -> None:
         BaseArguments.__post_init__(self)
-        MergeArguments.__post_init__(self)
         VllmArguments.__post_init__(self)
         self._init_result_path('infer_result')
         self._init_eval_human()

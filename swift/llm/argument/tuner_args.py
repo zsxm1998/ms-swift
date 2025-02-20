@@ -207,9 +207,9 @@ class TunerArguments:
             self.target_modules = self.target_regex
 
     def _init_multimodal_full(self):
-        if not self.model_meta.is_multimodal:
-            return
         model_arch = get_model_arch(self.model_meta.model_arch)
+        if not self.model_meta.is_multimodal or not model_arch:
+            return
         if self.freeze_llm:
             self.freeze_parameters += model_arch.language_model
         if self.freeze_vit:
@@ -222,4 +222,4 @@ class TunerArguments:
         if self.freeze_parameters:
             logger.info(f'freeze_parameters: {self.freeze_parameters}')
         if self.trainable_parameters:
-            logger.info(f'trainable_parameters: {self.trainable_parameters}')
+            logger.info(f'additional trainable_parameters: {self.trainable_parameters}')

@@ -49,7 +49,7 @@ Legend:
   SYS  = Path traversing PCIe and NUMA nodes. Nodes are connected through SMP, such as QPI, UPI.
   PHB  = Path traversing PCIe and the PCIe host bridge of a CPU.
   PIX  = Path traversing a single PCIe switch
-  PXB  = Path traversing multipul PCIe switches
+  PXB  = Path traversing multiple PCIe switches
   HCCS = Connection traversing HCCS.
   NA   = Unknown relationship.
 ```
@@ -187,16 +187,23 @@ swift sft \
 
 原始模型:
 ```shell
-ASCEND_RT_VISIBLE_DEVICES=0 swift infer --model Qwen/Qwen2-7B-Instruct
+ASCEND_RT_VISIBLE_DEVICES=0 swift infer \
+    --model Qwen/Qwen2-7B-Instruct \
+    --stream true --max_new_tokens 2048
 ```
 
 LoRA微调后:
 ```shell
-ASCEND_RT_VISIBLE_DEVICES=0 swift infer --adapters xxx/checkpoint-xxx --load_data_args true
+ASCEND_RT_VISIBLE_DEVICES=0 swift infer \
+    --adapters xxx/checkpoint-xxx --load_data_args true \
+    --stream true --max_new_tokens 2048
 
 # merge-lora并推理
 ASCEND_RT_VISIBLE_DEVICES=0 swift export --adapters xx/checkpoint-xxx --merge_lora true
-ASCEND_RT_VISIBLE_DEVICES=0 swift infer --model xxx/checkpoint-xxx-merged --load_data_args true
+
+ASCEND_RT_VISIBLE_DEVICES=0 swift infer \
+    --model xxx/checkpoint-xxx-merged --load_data_args true \
+    --stream true --max_new_tokens 2048
 ```
 
 
@@ -205,14 +212,14 @@ NPU不支持使用vllm进行推理/部署加速, 但是可以使用原生pytorch
 
 原始模型:
 ```shell
-ASCEND_RT_VISIBLE_DEVICES=0 swift deploy --model Qwen/Qwen2-7B-Instruct
+ASCEND_RT_VISIBLE_DEVICES=0 swift deploy --model Qwen/Qwen2-7B-Instruct --max_new_tokens 2048
 ```
 
 LoRA微调后:
 ```shell
-ASCEND_RT_VISIBLE_DEVICES=0 swift deploy --adapters xxx/checkpoint-xxx --load_data_args true
+ASCEND_RT_VISIBLE_DEVICES=0 swift deploy --adapters xxx/checkpoint-xxx --max_new_tokens 2048
 
 # merge-lora并推理
 ASCEND_RT_VISIBLE_DEVICES=0 swift export --adapters xx/checkpoint-xxx --merge_lora true
-ASCEND_RT_VISIBLE_DEVICES=0 swift deploy --model xxx/checkpoint-xxx-merged --load_data_args true
+ASCEND_RT_VISIBLE_DEVICES=0 swift deploy --model xxx/checkpoint-xxx-merged --max_new_tokens 2048
 ```

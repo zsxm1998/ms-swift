@@ -2,12 +2,15 @@
 # Part of the implementation is borrowed from huggingface/transformers.
 import os
 from contextlib import contextmanager, nullcontext
+from functools import wraps
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+import numpy as np
 import torch
 from peft import PeftModel
 from torch import nn
 from torch.nn.utils.rnn import pad_sequence
+from transformers import EvalPrediction
 from transformers import Seq2SeqTrainer as HfSeq2SeqTrainer
 from transformers import Trainer as HfTrainer
 from transformers.models.auto.modeling_auto import MODEL_FOR_CAUSAL_LM_MAPPING_NAMES
@@ -22,6 +25,35 @@ from .torchacc_mixin import TorchAccMixin
 class Trainer(SwiftMixin, HfTrainer):
     args: TrainingArguments
 
+    @contextmanager
+    def _patch_loss_function(self):
+        model = self.model
+        if isinstance(model, PeftModel):
+            model = model.model
+        model_cls = model.__class__
+        if not hasattr(model_cls, 'loss_function'):
+            yield
+            return
+
+        loss_function = model.loss_function
+        _old_loss_function = model_cls.loss_function
+
+        @staticmethod
+        @wraps(loss_function)
+        def new_loss_function(logits, labels, **kwargs):
+            labels = labels.to(logits.device)  # fix device_map
+            return loss_function(logits=logits, labels=labels, **kwargs)
+
+        model_cls.loss_function = new_loss_function
+        try:
+            yield
+        finally:
+            model_cls.loss_function = _old_loss_function
+
+    def train(self, *args, **kwargs):
+        with self._patch_loss_function():
+            return super().train(*args, **kwargs)
+
     def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
         loss, outputs = super().compute_loss(model, inputs, return_outputs=True)
         if inputs.get('labels') is not None:
@@ -29,6 +61,59 @@ class Trainer(SwiftMixin, HfTrainer):
         if num_items_in_batch is not None:
             loss /= self.args.gradient_accumulation_steps
         return (loss, outputs) if return_outputs else loss
+
+
+class EmbeddingTrainer(Trainer):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.compute_metrics = self.calculate_metric
+        self.preprocess_logits_for_metrics = None
+        self.label_names = ['labels']
+
+    def calculate_metric(self, eval_prediction: EvalPrediction) -> Dict[str, float]:
+        from sklearn.metrics.pairwise import paired_cosine_distances, paired_euclidean_distances, \
+            paired_manhattan_distances
+        from scipy.stats import pearsonr, spearmanr
+
+        embeddings = eval_prediction.predictions
+        labels = eval_prediction.label_ids
+        batch_size = 2 * self.args.per_device_eval_batch_size
+        half_batch_size = self.args.per_device_eval_batch_size
+        embeddings1 = []
+        embeddings2 = []
+        for i in range(embeddings.shape[0] // batch_size):
+            embeddings1.append(embeddings[i * batch_size:i * batch_size + half_batch_size])
+            embeddings2.append(embeddings[i * batch_size + half_batch_size:(i + 1) * batch_size])
+
+        embeddings1 = np.concatenate(embeddings1)
+        embeddings2 = np.concatenate(embeddings2)
+        if len(embeddings1.shape) == 3:
+            embeddings1 = embeddings1[:, 0]
+            embeddings2 = embeddings2[:, 0]
+        cosine_scores = 1 - (paired_cosine_distances(embeddings1, embeddings2))
+        manhattan_distances = -paired_manhattan_distances(embeddings1, embeddings2)
+        euclidean_distances = -paired_euclidean_distances(embeddings1, embeddings2)
+        dot_products = [np.dot(emb1, emb2) for emb1, emb2 in zip(embeddings1, embeddings2)]
+
+        eval_pearson_cosine, _ = pearsonr(labels, cosine_scores)
+        eval_spearman_cosine, _ = spearmanr(labels, cosine_scores)
+
+        eval_pearson_manhattan, _ = pearsonr(labels, manhattan_distances)
+        eval_spearman_manhattan, _ = spearmanr(labels, manhattan_distances)
+
+        eval_pearson_euclidean, _ = pearsonr(labels, euclidean_distances)
+        eval_spearman_euclidean, _ = spearmanr(labels, euclidean_distances)
+
+        eval_pearson_dot, _ = pearsonr(labels, dot_products)
+        eval_spearman_dot, _ = spearmanr(labels, dot_products)
+
+        return {
+            'cosine': eval_spearman_cosine,
+            'euclidean': eval_pearson_euclidean,
+            'manhattan': eval_pearson_manhattan,
+            'dot_product': eval_spearman_dot,
+        }
 
 
 class Seq2SeqTrainer(TorchAccMixin, SwiftMixin, HfSeq2SeqTrainer):
@@ -55,13 +140,13 @@ class Seq2SeqTrainer(TorchAccMixin, SwiftMixin, HfSeq2SeqTrainer):
         origin_data_collator = self.data_collator
 
         if is_multimodal:
-            self.template.remove_post_encode_hook()
+            models = self.template.remove_post_encode_hook()
         self.data_collator = self._predict_data_collator
         try:
             yield
         finally:
             if is_multimodal:
-                self.template.register_post_encode_hook([self.model])
+                self.template.register_post_encode_hook(models)
             self.data_collator = origin_data_collator
             self.template.set_mode(origin_mode)
 
@@ -91,11 +176,13 @@ class Seq2SeqTrainer(TorchAccMixin, SwiftMixin, HfSeq2SeqTrainer):
             template=self.template)
 
         response_list = []
+        jsonl_cache = []
         device = self.args.device
         for data, resp, labels in zip(data_list, resp_list, labels_list):
             response = resp.choices[0].message.content
-            self.jsonl_writer.append({'response': response, 'labels': labels, **data})
+            jsonl_cache.append({'response': response, 'labels': labels, **data})
             response_list.append(Serializer.to_tensor(resp.choices[0].message.content).to(device=device))
+        self.jsonl_writer.append(jsonl_cache, gather_obj=True)
         labels_list = [Serializer.to_tensor(labels).to(device=device) for labels in labels_list]
         response_list = pad_sequence(response_list, batch_first=True, padding_value=0)
         labels_list = pad_sequence(labels_list, batch_first=True, padding_value=0)
@@ -121,8 +208,6 @@ class Seq2SeqTrainer(TorchAccMixin, SwiftMixin, HfSeq2SeqTrainer):
             labels = inputs['labels']
             # fix https://github.com/huggingface/transformers/issues/34263
             if num_items_in_batch is not None:
-                if getattr(self.args, 'average_tokens_across_devices', False):
-                    outputs.loss *= self.accelerator.num_processes
                 outputs.loss = outputs.loss * (labels[:, 1:] != -100).sum() / num_items_in_batch
 
             if isinstance(outputs, dict) and 'loss' not in outputs:

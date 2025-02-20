@@ -4,9 +4,7 @@ import inspect
 import os
 import shutil
 import time
-from contextlib import contextmanager
 from copy import copy
-from functools import wraps
 from types import MethodType
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
@@ -23,7 +21,7 @@ from transformers import PreTrainedModel
 from transformers.data.data_collator import DataCollator
 from transformers.integrations import is_deepspeed_zero3_enabled
 from transformers.modeling_utils import unwrap_model
-from transformers.trainer import Trainer, TrainerCallback
+from transformers.trainer import TrainerCallback
 from transformers.trainer_utils import EvalPrediction
 from transformers.utils import is_torch_npu_available
 
@@ -33,8 +31,8 @@ from swift.plugin import MeanMetric, compute_acc, extra_tuners
 from swift.tuners import SwiftModel
 from swift.utils import get_logger, is_mp_ddp, use_torchacc
 from swift.utils.torchacc_utils import ta_trim_graph
+from ..utils.torch_utils import get_device_count
 from .arguments import TrainingArguments
-from .optimizers.galore import create_optimizer_and_scheduler
 from .utils import can_return_loss, find_labels, get_function, is_instance_of_ms_model
 
 try:
@@ -47,21 +45,20 @@ logger = get_logger()
 
 class SwiftMixin:
 
-    def __init__(
-            self,
-            model: Union[PreTrainedModel, Module] = None,
-            args: TrainingArguments = None,
-            data_collator: Optional[DataCollator] = None,
-            train_dataset: Optional[HfDataset] = None,
-            eval_dataset: Optional[Union[HfDataset, Dict[str, HfDataset]]] = None,
-            template: Optional[Template] = None,
-            model_init: Optional[Callable[[], PreTrainedModel]] = None,
-            compute_loss_func: Optional[Callable] = None,
-            compute_metrics: Optional[Callable[[EvalPrediction], Dict]] = None,
-            callbacks: Optional[List[TrainerCallback]] = None,
-            optimizers: Tuple[torch.optim.Optimizer, torch.optim.lr_scheduler.LambdaLR] = (None, None),
-            preprocess_logits_for_metrics: Optional[Callable[[torch.Tensor, torch.Tensor],
-                                                             torch.Tensor]] = None) -> None:
+    def __init__(self,
+                 model: Union[PreTrainedModel, Module] = None,
+                 args: TrainingArguments = None,
+                 data_collator: Optional[DataCollator] = None,
+                 train_dataset: Optional[HfDataset] = None,
+                 eval_dataset: Optional[Union[HfDataset, Dict[str, HfDataset]]] = None,
+                 template: Optional[Template] = None,
+                 model_init: Optional[Callable[[], PreTrainedModel]] = None,
+                 compute_loss_func: Optional[Callable] = None,
+                 compute_metrics: Optional[Callable[[EvalPrediction], Dict]] = None,
+                 callbacks: Optional[List[TrainerCallback]] = None,
+                 optimizers: Tuple[torch.optim.Optimizer, torch.optim.lr_scheduler.LambdaLR] = (None, None),
+                 preprocess_logits_for_metrics: Optional[Callable[[torch.Tensor, torch.Tensor], torch.Tensor]] = None,
+                 **kwargs) -> None:
         if args.check_model and hasattr(model, 'model_dir'):
             check_local_model_is_latest(
                 model.model_dir, user_agent={
@@ -76,6 +73,7 @@ class SwiftMixin:
             from swift.trainers.xtuner import init_sequence_parallel_xtuner
             init_sequence_parallel_xtuner(args.sequence_parallel_size)
 
+        self.model_meta = model.model_meta
         with self.hub.patch_hub():
             super().__init__(
                 model=model,
@@ -88,7 +86,8 @@ class SwiftMixin:
                 compute_metrics=compute_metrics,
                 callbacks=callbacks,
                 optimizers=optimizers,
-                preprocess_logits_for_metrics=preprocess_logits_for_metrics)
+                preprocess_logits_for_metrics=preprocess_logits_for_metrics,
+                **kwargs)
 
         self.compute_loss_func = compute_loss_func
         if get_function(model.__class__.forward) is not get_function(model.forward):
@@ -220,7 +219,7 @@ class SwiftMixin:
         # tokenizer
         if not is_adapter:
             from swift.llm import save_checkpoint
-            additional_saved_files = self.model.model_meta.additional_saved_files
+            additional_saved_files = self.model_meta.additional_saved_files
             save_checkpoint(None, self.template.processor, output_dir, additional_saved_files=additional_saved_files)
 
     def _fix_zero3_gather_all_parameters(self) -> None:
@@ -249,31 +248,8 @@ class SwiftMixin:
         logger.info(f'Saving model checkpoint to {self.state.last_model_checkpoint}')
         return result
 
-    @contextmanager
-    def _patch_loss_function(self):
-        model = self.model
-        if isinstance(model, PeftModel):
-            model = model.model
-        model_cls = model.__class__
-        if not hasattr(model_cls, 'loss_function'):
-            yield
-            return
-
-        loss_function = model.loss_function
-        _old_loss_function = model_cls.loss_function
-
-        @staticmethod
-        @wraps(loss_function)
-        def new_loss_function(logits, labels, **kwargs):
-            labels = labels.to(logits.device)  # fix device_map
-            return loss_function(logits=logits, labels=labels, **kwargs)
-
-        model_cls.loss_function = new_loss_function
-        yield
-        model_cls.loss_function = _old_loss_function
-
     def train(self, *args, **kwargs):
-        if self.model.model_meta.is_multimodal:
+        if self.model_meta.is_multimodal:
             models = list(
                 set([
                     v for k, v in self.__dict__.items()
@@ -282,7 +258,7 @@ class SwiftMixin:
             self.template.register_post_encode_hook(models)
             logger.info(f'Successfully registered post_encode hook: {[model.__class__.__name__ for model in models]}')
         self._save_initial_model(self.args.output_dir)
-        with self.hub.patch_hub(), self._patch_loss_function():
+        with self.hub.patch_hub():
             res = super().train(*args, **kwargs)
         self.template.remove_post_encode_hook()
         return res
@@ -293,7 +269,7 @@ class SwiftMixin:
 
     def get_max_cuda_memory(self, device: Optional[Union[torch.device, int]] = None) -> float:
         if device is None:
-            mems = [torch.cuda.max_memory_reserved(device=device) for device in range(torch.cuda.device_count())]
+            mems = [torch.cuda.max_memory_reserved(device=device) for device in range(get_device_count())]
         else:
             mems = [torch.cuda.max_memory_reserved(device=device)]
         mem = sum(mems) / 1024**3
@@ -341,31 +317,16 @@ class SwiftMixin:
         super()._maybe_log_save_evaluate(tr_loss, *args, **kwargs)
 
     def create_optimizer_and_scheduler(self, num_training_steps: int):
-        if hasattr(self.args, 'galore_config'):
-            optimizer, lr_scheduler = create_optimizer_and_scheduler(
-                self.model,
-                self.args,
-                self.args.galore_config,
-                num_training_steps,
-                lr=self.args.learning_rate,
-                weight_decay=self.args.weight_decay)
-            self.optimizer = optimizer
-            self.lr_scheduler = lr_scheduler
+        if self.args.optimizer is not None:
+            from swift.plugin import optimizers_map
+            optimizer_callback = optimizers_map[self.args.optimizer]
+            self.optimizer, self.lr_scheduler = optimizer_callback(self.args, self.model, self.train_dataset)
+            if self.optimizer is None:
+                self.create_optimizer()
+            if self.lr_scheduler is None:
+                self.create_scheduler(num_training_steps=num_training_steps, optimizer=self.optimizer)
         else:
             super().create_optimizer_and_scheduler(num_training_steps=num_training_steps)
-
-    def create_optimizer(self):
-
-        if self.optimizer is None and hasattr(self.model, 'create_optimizer_param_groups'):
-            # Lora+ parameter groups
-            optimizer_grouped_parameters = self.model.create_optimizer_param_groups(
-                lr=self.args.learning_rate, weight_decay=self.args.weight_decay)
-            if optimizer_grouped_parameters is not None:
-                optimizer_cls, optimizer_kwargs = Trainer.get_optimizer_cls_and_kwargs(self.args)
-                self.optimizer = optimizer_cls(optimizer_grouped_parameters, **optimizer_kwargs)
-                return self.optimizer
-
-        return super().create_optimizer()
 
     def _get_train_sampler(self) -> Optional[torch.utils.data.Sampler]:
         if self.args.train_sampler_random:
