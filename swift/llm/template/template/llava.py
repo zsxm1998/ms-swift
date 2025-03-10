@@ -41,6 +41,7 @@ register_template(
         prompt=['USER: {{QUERY}}\nASSISTANT:'],
         chat_sep=['</s>'],
         suffix=['</s>'],
+        system_prefix=['<s>{{SYSTEM}}\n'], # add by ZSXM
         template_cls=LlavaHfTemplate,
     ))
 
@@ -193,7 +194,8 @@ class LlavaLlama3_1HfTemplate(LlavaHfTemplate):
 
     def _encode(self, inputs: StdTemplateInputs) -> Dict[str, Any]:
         encoded = super()._encode(inputs)
-        if len(encoded['pixel_values'].shape) == 5:  # (1, num_patch, 3, H/W, W/H)
+        # modified by ZSXM: add 'pixel_values' in encoded
+        if 'pixel_values' in encoded and len(encoded['pixel_values'].shape) == 5:  # (1, num_patch, 3, H/W, W/H)
             encoded['pixel_values'] = torch.squeeze(encoded['pixel_values'], dim=0)  # (num_patch, 3, H/W, W/H)
         return encoded
 
