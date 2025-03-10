@@ -44,12 +44,11 @@ class PPOConfig(SwiftArgumentsMixin, HfPPOConfig):
 
 @dataclass
 class GRPOConfig(GRPOArgumentsMixin, SwiftArgumentsMixin, HfGRPOConfig):
-    top_k: Optional[int] = None
-    top_p: Optional[float] = None
-    repetition_penalty: Optional[float] = None
     stop_words: List[str] = field(default_factory=list)
 
     def __post_init__(self):
+        from swift.llm.argument.base_args.model_args import ModelArguments
         super().__post_init__()
         if self.cosine_max_len is None:
             self.cosine_max_len = self.max_completion_length
+        self.vllm_limit_mm_per_prompt = ModelArguments.parse_to_dict(self.vllm_limit_mm_per_prompt)
