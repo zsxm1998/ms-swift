@@ -25,7 +25,7 @@ class SwiftApp(SwiftPipeline):
             base_url = base_url or args.base_url
             demo = build_ui(
                 base_url,
-                args.model_suffix,
+                args.served_model_name or args.model_suffix, # modified by ZSXM
                 request_config=args.get_request_config(),
                 is_multimodal=args.is_multimodal,
                 studio_title=args.studio_title,

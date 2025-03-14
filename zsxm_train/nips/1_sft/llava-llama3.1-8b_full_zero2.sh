@@ -4,7 +4,7 @@ NPROC_PER_NODE=8 \
 swift sft \
     --output_dir ./zsxm_checkpoint/nips/1_sft/llava-llama3.1-8b_0306_full_VAL_2 \
     --model swift/llava-llama3.1-8b \
-    --deepspeed zero3 \
+    --deepspeed zero2 \
     --torch_dtype bfloat16 \
     --train_type full \
     --gradient_checkpointing true \
@@ -12,7 +12,7 @@ swift sft \
     --freeze_vit false \
     --freeze_aligner false \
     --dataset ./zsxm_dataset/nips/1_sft/SFT-0306.json \
-              swift/self-cognition#500 \
+              swift/self-cognition#1000 \
     --max_length 8192 \
     --max_pixels $((336*336)) \
     --truncation_strategy right \
