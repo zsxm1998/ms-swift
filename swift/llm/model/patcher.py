@@ -237,12 +237,15 @@ def patch_automodel_for_sequence_classification(model_meta):
 
 
 @contextmanager
-def patch_automodel_for_awq():
+def patch_automodel(automodel_class, model_info):
     from_pretrained = PreTrainedModel.from_pretrained.__func__
 
     @classmethod
     def _new_from_pretrained(cls, *args, **kwargs):
-        kwargs.pop('use_cache', None)
+        if 'AutoAWQFor' in automodel_class.__name__:
+            kwargs.pop('use_cache', None)
+        if model_info.quant_method == 'gptq':
+            cls.main_input_name = 'input_ids'
         return from_pretrained(cls, *args, **kwargs)
 
     PreTrainedModel.from_pretrained = _new_from_pretrained
@@ -299,9 +302,9 @@ def patch_mp_ddp():
 def patch_get_dynamic_module():
     origin_get_cached_module_file = dynamic_module_utils.get_cached_module_file
 
-    def new_get_cached_module_file(pretrained_model_name_or_path, module_file: str, *args, **kwargs):
-        with safe_ddp_context(hash_id=module_file):
-            return origin_get_cached_module_file(pretrained_model_name_or_path, module_file, *args, **kwargs)
+    def new_get_cached_module_file(pretrained_model_name_or_path, *args, **kwargs):
+        with safe_ddp_context(hash_id=str(pretrained_model_name_or_path)):
+            return origin_get_cached_module_file(pretrained_model_name_or_path, *args, **kwargs)
 
     dynamic_module_utils.get_cached_module_file = new_get_cached_module_file
     try:

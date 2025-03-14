@@ -8,6 +8,7 @@ import time
 from collections import defaultdict
 from concurrent.futures import Future
 from contextlib import contextmanager
+from copy import copy, deepcopy
 from dataclasses import dataclass, field
 from math import ceil
 from queue import Queue
@@ -23,7 +24,7 @@ from transformers import PreTrainedModel, TrainerCallback
 from trl import GRPOTrainer as HFGRPOTrainer
 
 from swift.llm import InferRequest, MultiModelKeys, RequestConfig, RowPreprocessor, get_model_arch, to_device
-from swift.llm.infer.infer_engine import GRPOVllmEngine
+from swift.llm.infer.infer_engine import GRPOVllmEngine, set_device_context
 from swift.plugin import orms
 from swift.utils import (JsonlWriter, gc_collect, get_device, get_device_count, get_dist_setting, get_logger,
                          get_node_setting, is_lmdeploy_available, is_vllm_available, is_wandb_available)
@@ -158,6 +159,7 @@ class GRPOTrainer(RLHFTrainerMixin, SwiftMixin, HFGRPOTrainer):
             self.reward_weights = torch.ones(len(reward_funcs), dtype=torch.float32)
 
         self.num_generations = args.num_generations
+        self.temperature = args.temperature
         model.warnings_issued['estimate_tokens'] = True
         kwargs['data_collator'] = lambda features: features
         self._metrics = {'train': defaultdict(list), 'eval': defaultdict(list)}
@@ -189,6 +191,8 @@ class GRPOTrainer(RLHFTrainerMixin, SwiftMixin, HFGRPOTrainer):
         # it's safer to set it in all cases.
         set_seed(args.seed, device_specific=True)
         self.parameter_groups, self.parameter_groups_no_lora = self.split_batches()
+        self.infer_device = None
+
         if use_vllm or use_lmdeploy:
             if self.infer_rank >= 0:
                 fast_infer_device = self.args.vllm_device or self.args.lmdeploy_device
@@ -221,6 +225,7 @@ class GRPOTrainer(RLHFTrainerMixin, SwiftMixin, HFGRPOTrainer):
                         raise ImportError('vLLM is not available and `use_vllm` is set to True. '
                                           'Please install vLLM with `pip install vllm -U` to use it.')
                     self.prepare_vllm(model, fast_infer_device)
+                    self.infer_device = fast_infer_device[self.local_infer_rank]
                 elif use_lmdeploy:
                     if not is_lmdeploy_available():
                         raise ImportError('LMDeploy is not available and `use_lmdeploy` is set to True.'
@@ -237,6 +242,7 @@ class GRPOTrainer(RLHFTrainerMixin, SwiftMixin, HFGRPOTrainer):
                             session_len=args.lmdeploy_session_len,
                             cache_max_entry_count=args.lmdeploy_cache_max_entry_count,
                             reload_weights=True)
+                        self.infer_device = fast_infer_device
                     self.engine.default_template = self.template
             self._last_loaded_step = 0  # tag to avoid useless loading during grad accumulation
 
@@ -255,6 +261,11 @@ class GRPOTrainer(RLHFTrainerMixin, SwiftMixin, HFGRPOTrainer):
             repetition_penalty=args.repetition_penalty,
             stop=args.stop_words,
         )
+
+        if local_world_size == self.args.num_infer_workers == get_device_count() and local_world_size > 1:
+            self.request_config.n = self.args.tensor_parallel_size
+            if self.infer_rank >= 0:
+                self.request_config.seed = self.infer_rank // self.args.tensor_parallel_size
 
         self.model_accepts_loss_kwargs = False
         for i, reward_func in enumerate(self.reward_funcs):
@@ -340,6 +351,7 @@ class GRPOTrainer(RLHFTrainerMixin, SwiftMixin, HFGRPOTrainer):
             parameters.append(llm_embeds)
         if non_llm_parameters:
             parameters.append(non_llm_parameters)
+        parameters = [p for p in parameters if p]
         return parameters, [remove_lora(p_list) for p_list in parameters]
 
     def prepare_vllm(self, model, fast_infer_device):
@@ -375,6 +387,18 @@ class GRPOTrainer(RLHFTrainerMixin, SwiftMixin, HFGRPOTrainer):
         for _vllm_rank in range(self.args.num_infer_workers):
             if local_rank == _vllm_rank:
                 return get_node_setting()[0] * self.args.num_infer_workers + _vllm_rank
+
+        return -1
+
+    @property
+    def infer_rank_tp_0(self):
+        # whether is tp rank0, get data from this rank
+        # vllm needs all tp ranks inputs and sampling params are the same
+        rank, local_rank, world_size, local_world_size = get_dist_setting()
+        for _vllm_rank in range(self.args.num_infer_workers):
+            if local_rank == _vllm_rank and _vllm_rank % self.args.tensor_parallel_size == 0:
+                return (get_node_setting()[0] * self.args.num_infer_workers
+                        + _vllm_rank // self.args.tensor_parallel_size)
 
         return -1
 
@@ -572,8 +596,14 @@ class GRPOTrainer(RLHFTrainerMixin, SwiftMixin, HFGRPOTrainer):
         return [index_to_output[idx] for idx in sorted(index_to_output.keys())]
 
     def async_infer(self, inputs, inputs_slice, distributed_idx):
-        future: Future = self.executor.submit(
-            self.engine.infer, infer_requests=inputs_slice, request_config=self.request_config, use_tqdm=False)
+
+        def infer_task():
+            with set_device_context(self.infer_device):
+                result = self.engine.infer(
+                    infer_requests=inputs_slice, request_config=self.request_config, use_tqdm=False)
+                return result
+
+        future: Future = self.executor.submit(infer_task)
 
         def done(_self):
             self.queue.put(DataCache(inputs, _self.result(), distributed_idx))
@@ -622,7 +652,22 @@ class GRPOTrainer(RLHFTrainerMixin, SwiftMixin, HFGRPOTrainer):
                 outputs = data_cache.outputs
                 distributed_idx = data_cache.distributed_idx
             else:
-                outputs = self.engine.infer(_input_slice, self.request_config, use_tqdm=False)
+                with set_device_context(self.infer_device):
+                    request_config = copy(self.request_config)
+                    if self.args.tensor_parallel_size > 1:
+                        request_config.seed += self.state.global_step
+                    outputs = self.engine.infer(_input_slice, self.request_config, use_tqdm=False)
+                if self.args.tensor_parallel_size > 1:
+                    if self.infer_rank_tp_0 < 0:
+                        outputs = []
+                    else:
+                        _outputs = []
+                        for tp_idx in range(self.args.tensor_parallel_size):
+                            for prompt_idx in range(len(outputs)):
+                                output = deepcopy(outputs[prompt_idx])
+                                output.choices = [output.choices[tp_idx]]
+                                _outputs.append(output)
+                        outputs = _outputs
         else:
             if self.args.async_generate:
                 self.queue.put(DataCache(inputs, [], distributed_idx))
@@ -661,7 +706,8 @@ class GRPOTrainer(RLHFTrainerMixin, SwiftMixin, HFGRPOTrainer):
             is_multimodal = self.model.model_meta.is_multimodal
             if is_multimodal:
                 models = self.template.remove_post_encode_hook()
-            with unwrap_model_for_generation(self.model_wrapped, self.accelerator):
+            with unwrap_model_for_generation(
+                    self.model_wrapped, self.accelerator, gather_deepspeed3_params=self.args.ds3_gather_for_generation):
                 # same reference
                 outputs = self.engine.infer(inputs, self.request_config, use_tqdm=False)
                 self.model.train()
@@ -836,6 +882,7 @@ class GRPOTrainer(RLHFTrainerMixin, SwiftMixin, HFGRPOTrainer):
         logits = model(**inputs).logits
         # exclude the last logit: it corresponds to the next token pred
         logits = logits[:, -(logits_to_keep + 1):-1, :]
+        logits = logits / self.temperature
         input_ids = input_ids[:, -logits_to_keep:]
         return selective_log_softmax(logits, input_ids)  # compute logprobs for the input tokens
 
