@@ -17,13 +17,14 @@ swift sft \
     --max_pixels $((336*336)) \
     --truncation_strategy right \
     --num_train_epochs 2 \
-    --per_device_train_batch_size 1 \
-    --gradient_accumulation_steps 1 \
+    --per_device_train_batch_size 4 \
+    --gradient_accumulation_steps 4 \
     --learning_rate 2e-5 \
     --eval_strategy no \
     --save_strategy epoch \
     --save_total_limit 1 \
     --logging_steps 1 \
     --use_hf false \
+    --check_model false \
     --model_author "浙江大学VIPA实验室" "Zhejiang University VIPA Laboratory" \
     --model_name "OmniPT" "OmniPT"
