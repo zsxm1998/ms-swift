@@ -153,5 +153,5 @@ ast_index_file.py
 datasets
 zsxm_checkpoint
 zsxm_dataset
-zsxm_val/icip
+zsxm_val/results
 *.ipynb

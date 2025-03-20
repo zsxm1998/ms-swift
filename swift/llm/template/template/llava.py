@@ -74,6 +74,7 @@ register_template(
         chat_sep=['</s>'],
         suffix=['</s>'],
         system_prefix=['<s>{{SYSTEM}}\n'], # add by ZSXM
+        tool_prompt=['TOOL: {{QUERY}}\nASSISTANT:'], # add by ZSXM
         template_cls=LlavaHfTemplate,
     ))
 
