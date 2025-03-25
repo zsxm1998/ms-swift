@@ -2,7 +2,7 @@
 CUDA_VISIBLE_DEVICES="0,1,2,3,4,5,6,7" \
 NPROC_PER_NODE=8 \
 swift sft \
-    --output_dir ./zsxm_checkpoint/nips/1_sft/llava-1.5-7b_0306_full_VAL_2 \
+    --output_dir ./zsxm_checkpoint/nips/1_sft/llava-1.5-7b_0318_full_VAL_2 \
     --model swift/llava-1.5-7b-hf \
     --deepspeed zero2 \
     --torch_dtype bfloat16 \
@@ -11,7 +11,7 @@ swift sft \
     --attn_impl flash_attn \
     --freeze_vit false \
     --freeze_aligner false \
-    --dataset ./zsxm_dataset/nips/1_sft/SFT-0306.json \
+    --dataset ./zsxm_dataset/nips/1_sft/SFT-0318.json \
               swift/self-cognition#1000 \
     --max_length 8192 \
     --max_pixels $((336*336)) \

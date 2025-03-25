@@ -90,12 +90,6 @@ def str2mask(s, n):
                 result[idx] = 1
     return result
 
-def extract_block_content(s):
-    # 使用正则表达式查找 <block> 和 </block> 之间的内容
-    match = re.search(r'<block>(.*?)</block>', s)
-    # 如果找到匹配项，则返回匹配的内容，否则返回空字符串
-    return match.group(1) if match else ''
-
 # 定义和测试将模型回答转换为contour/bbox的函数
 def remove_outer_tags(input_string):
     start_index = input_string.find('<')
