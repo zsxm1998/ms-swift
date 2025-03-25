@@ -19,7 +19,6 @@ from transformers.utils import is_peft_available
 from swift.utils import JsonlWriter, Serializer, gc_collect
 from .arguments import Seq2SeqTrainingArguments, TrainingArguments
 from .mixin import SwiftMixin
-from .torchacc_mixin import TorchAccMixin
 
 
 class Trainer(SwiftMixin, HfTrainer):
@@ -58,7 +57,7 @@ class Trainer(SwiftMixin, HfTrainer):
         loss, outputs = super().compute_loss(model, inputs, return_outputs=True)
         if inputs.get('labels') is not None:
             self._compute_acc(outputs, inputs['labels'])
-        if num_items_in_batch is not None:
+        if num_items_in_batch is not None and self.model_accepts_loss_kwargs:
             loss /= self.args.gradient_accumulation_steps
         return (loss, outputs) if return_outputs else loss
 
@@ -116,7 +115,7 @@ class EmbeddingTrainer(Trainer):
         }
 
 
-class Seq2SeqTrainer(TorchAccMixin, SwiftMixin, HfSeq2SeqTrainer):
+class Seq2SeqTrainer(SwiftMixin, HfSeq2SeqTrainer):
     args: Seq2SeqTrainingArguments
 
     def __init__(self, *args, **kwargs):
@@ -233,11 +232,11 @@ class Seq2SeqTrainer(TorchAccMixin, SwiftMixin, HfSeq2SeqTrainer):
             else:
                 loss = self.label_smoother(outputs, labels)
 
-        if self.args.sequence_parallel_size > 1:
+        if self.template.sequence_parallel_size > 1:
             from swift.trainers.xtuner import reduce_xtuner_sequence_parallel_loss
             loss = reduce_xtuner_sequence_parallel_loss(loss, labels)
 
-        if getattr(self.args, 'average_tokens_across_devices', False):
+        if getattr(self.args, 'average_tokens_across_devices', False) and self.model_accepts_loss_kwargs:
             loss *= self.accelerator.num_processes
 
         if outputs.logits is not None and labels is not None:

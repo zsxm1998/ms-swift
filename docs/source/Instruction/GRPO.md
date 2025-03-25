@@ -7,7 +7,7 @@
 环境安装
 ```bash
 pip install math_verify # reward function
-pip install git+https://github.com/huggingface/trl.git"
+pip install -U trl"
 ```
 
 **注意**：训练过程中 loss 接近0 是正常情况， 参考[issue](https://github.com/huggingface/open-r1/issues/239#issuecomment-2646297851)
@@ -20,6 +20,9 @@ SWIFT的GRPO训练中，训练模型尽量使用可见显卡的前部分，而ro
 
 - 如果命令中NPROC_PER_NODE和num_infer_workers相等，都是可见显卡数量，训练和推理放在了相同显卡上，这时需要配置sleep_level
 - 如果命令中NPROC_PER_NODE加上num_infer_workers等于可见显卡数量，则训练使用前部分卡，rollout使用后部分卡，这时可以配置async_generate
+
+> async_generate实际上使用了step-1的policy model，因此`clip`操作实际上不生效。如果训练中不稳定或者无法收敛，可以尝试关掉此参数。
+> 在我们的实际实验中，即使开启async_generate后不稳定或不收敛的情况较少出现。
 
 ## 奖励函数
 ### 自定义奖励函数
@@ -66,8 +69,8 @@ A conversation between User and Assistant. The user asks a question, and the Ass
 使用余弦函数平滑地调整奖励值，确保奖励变化在合理范围内。余弦函数的参数包括生成文本的长度、最大长度限制以及奖励的最小值和最大值。
 
 参数
-- cosine_min_len_value_wrong（默认值：0.0）：生成错误答案时，最小长度对应的奖励值。
-- cosine_max_len_value_wrong（默认值：-0.5）：生成错误答案时，最大长度对应的奖励值。
+- cosine_min_len_value_wrong（默认值：-0.5）：生成错误答案时，最小长度对应的奖励值。
+- cosine_max_len_value_wrong（默认值：0.0）：生成错误答案时，最大长度对应的奖励值。
 - cosine_min_len_value_correct（默认值：1.0）：生成正确答案时，最小长度对应的奖励值。
 - cosine_max_len_value_correct（默认值：0.5）：生成正确答案时，最大长度对应的奖励值。
 - cosine_max_len（默认值等于模型生成的最大程度）：生成文本的最大长度限制。
@@ -105,13 +108,16 @@ A conversation between User and Assistant. The user asks a question, and the Ass
 - vllm_max_model_len: vLLM透传参数
 - reward_model: 同model, 使用奖励模型作为奖励函数，与reward_funcs至少需要指定一个
 - num_iterations: 每个批次代更新次数，默认为1.
-- epsilon: clip 系数
+- epsilon: clip 系数，默认为0.2.
+- epsilon_high: upper clip 系数，默认为None，设置后与epsilon共同构成[epsilon, epsilon_high]裁剪范围.
 - async_generate: 异步rollout以提高训练速度，默认`false`.
 - sleep_level: vllm特有参数，在训练和rollout复用卡的时候，可以选择vllm进行offload.
 - move_model_batches: 在模型向vLLM/LMDeploy等快速推理框架移动参数时，将layers分为多少个batch. 默认为None, 代表整个模型不进行拆分，否则拆分为move_model_batches+1(非layer参数)+1(多模态部分参数)个
 - offload_optimizer: 是否在vLLM/LMDeploy推理时offload optimizer参数，默认为False
 - offload_model: 是否在vLLM/LMDeploy推理时offload 模型本身，默认为False
 - gc_collect_after_offload: 是否在offload结束时进行gc（python gc和GPU gc），默认为False
+- mini_batch_size：用于将每个设备上的批次大小（per_device_batch）进一步切分为更小的子批次。为确保切分有效，per_device_batch 需要能够被 mini_batch_size 整除。
+
 
 奖励函数超参，见[内置奖励函数](#内置奖励函数)
 

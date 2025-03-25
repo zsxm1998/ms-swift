@@ -13,7 +13,7 @@ The standard dataset format for ms-swift accepts keys such as: 'messages', 'reje
 
 There are three core preprocessors in ms-swift: `MessagesPreprocessor`, `AlpacaPreprocessor`, and `ResponsePreprocessor`. `MessagesPreprocessor` is used to convert datasets in the messages and sharegpt format into the standard format. `AlpacaPreprocessor` converts datasets in the alpaca format, while `ResponsePreprocessor` converts datasets in the query/response format. `AutoPreprocessor` automatically selects the appropriate preprocessor for the task.
 
-The following four formats will all be converted to the messages field in the ms-swift standard format by `AutoPreprocessor`:
+The following four formats will all be converted into the `messages` field of the ms-swift standard format under the processing of `AutoPreprocessor`, meaning they can all be directly used with `--dataset <dataset-path>`:
 
 Messages format (standard format):
 ```jsonl
@@ -81,25 +81,35 @@ The following outlines the standard dataset format for ms-swift, where the "syst
 - Note: GRPO will pass through all additional field content to the ORM, unlike other training methods that, by default, delete extra fields. For example, you can additionally pass in 'solution'. The custom ORM needs to include a positional argument called `completions`, with other arguments as keyword arguments passed through from the additional dataset fields.
 
 ### Sequence Classification
+
+**Single-label Task**:
 ```jsonl
 {"messages": [{"role": "user", "content": "The weather is really nice today"}], "label": 1}
 {"messages": [{"role": "user", "content": "Today is really unlucky"}], "label": 0}
 {"messages": [{"role": "user", "content": "So happy"}], "label": 1}
 ```
 
+**Multi-label Task**:
+
+```jsonl
+{"messages": [{"role": "user", "content": "<sentence>"}], "label": [1, 3, 5]}
+```
+
+**Single Regression Task**:
+
+```jsonl
+{"messages": [{"role": "user", "content": "Calculate the similarity between two sentences, with a range of 0-1.\nsentence1: <sentence1>\nsentence2: <sentence2>"}], "label": 0.8}
+```
+
+**Multi Regression Task**:
+
+```jsonl
+{"messages": [{"role": "user", "content": "<sentence>"}], "label": [1.2, -0.6, 0.8]}
+```
+
 ### Embedding
-label means the similarity between sentences, use together with loss `cosine_similarity`
-```jsonl
-{"messages": [{"role": "assistant", "content": "今天天气真好呀"}], "rejected_response": "今天天气不错", "label": 0.8}
-{"messages": [{"role": "assistant", "content": "这本书不错"}], "rejected_response": "这个汽车开着有异响", "label": 0.2}
-{"messages": [{"role": "assistant", "content": "天空是蓝色的"}], "rejected_response": "教练我想打篮球", "label": 0.0}
-```
-Also, can be the format below（label only support two values: 0.0 and 1.0）, use loss `contrastive` or `online_contrastive`（contrastive learning）:
-```jsonl
-{"messages": [{"role": "assistant", "content": "今天天气真好呀"}], "rejected_response": "今天天气不错", "label": 1.0}
-{"messages": [{"role": "assistant", "content": "这本书不错"}], "rejected_response": "这个汽车开着有异响", "label": 0.0}
-{"messages": [{"role": "assistant", "content": "天空是蓝色的"}], "rejected_response": "教练我想打篮球", "label": 0.0}
-```
+
+Please refer to [embedding训练文档](../BestPractices/Embedding.md#dataset-format).
 
 ### Multimodal
 
@@ -179,7 +189,7 @@ You can refer to the ms-swift built-in [dataset_info.json](https://github.com/mo
     "ms_dataset_id": "xxx/xxx"
   },
   {
-    "dataset_path": "<dataset_path>"
+    "dataset_path": "<dataset_dir/dataset_path>"
   },
   {
     "ms_dataset_id": "<dataset_id>",
@@ -213,21 +223,23 @@ You can refer to the ms-swift built-in [dataset_info.json](https://github.com/mo
 
 The following parameters are supported:
 
-- ms_dataset_id: Refers to the DatasetMeta parameter
-- hf_dataset_id: Refers to the DatasetMeta parameter
-- dataset_path: Refers to the DatasetMeta parameter
-- subsets: Refers to the DatasetMeta parameter
-- split: Refers to the DatasetMeta parameter
-- columns: Transforms column names before preprocessing the dataset
+- ms_dataset_id: Refers to the DatasetMeta parameter.
+- hf_dataset_id: Refers to the DatasetMeta parameter.
+- dataset_path: Refers to the DatasetMeta parameter.
+- dataset_name: Refers to the DatasetMeta parameter.
+- subsets: Refers to the DatasetMeta parameter.
+- split: Refers to the DatasetMeta parameter.
+- columns: Transforms column names before preprocessing the dataset.
 
 ## Dataset Registration
 
 `register_dataset` will register the dataset in `DATASET_MAPPING`. You can call the function `register_dataset(dataset_meta)` to complete the dataset registration, where `dataset_meta` will store the metadata of the model. The parameter list for DatasetMeta is as follows:
 
-- ms_dataset_id: The dataset_id for ModelScope, default is None
-- hf_dataset_id: The dataset_id for HuggingFace, default is None
-- dataset_path: The local path to the dataset (an absolute path is recommended)
-- subsets: A list of subdataset names or a list of `SubsetDataset` objects, default is `['default']`. (The concepts of subdatasets and splits only exist for dataset_id or dataset_dir (open source datasets cloned via git))
-- split: Defaults to `['train']`
-- preprocess_func: A preprocessing function or callable object, default is `AutoPreprocessor()`. This preprocessing function takes an `HfDataset` as input and returns an `HfDataset` in the standard format
+- ms_dataset_id: The dataset_id for ModelScope, default is None.
+- hf_dataset_id: The dataset_id for HuggingFace, default is None.
+- dataset_path: The local path to the dataset (an absolute path is recommended), default is None.
+- dataset_name: The alias of the dataset, which can be specified via `--dataset <dataset_name>`. This is very convenient when the dataset_path is long. The default value is None.
+- subsets: A list of subdataset names or a list of `SubsetDataset` objects, default is `['default']`. (The concepts of subdatasets and splits only exist for dataset_id or dataset_dir (open source datasets cloned via git)).
+- split: Defaults to `['train']`.
+- preprocess_func: A preprocessing function or callable object, default is `AutoPreprocessor()`. This preprocessing function takes an `HfDataset` as input and returns an `HfDataset` in the standard format.
 - load_function: Defaults to `DatasetLoader.load`. If a custom loading function is needed, it should return an `HfDataset` in the standard format, allowing users maximum flexibility while bypassing the ms-swift dataset loading mechanism. This parameter usually does not need to be modified.

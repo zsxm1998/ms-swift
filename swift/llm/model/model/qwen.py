@@ -490,8 +490,7 @@ register_model(
         model_arch=ModelArch.llama))
 
 
-def patch_qwen_vl_utils():
-    from qwen_vl_utils import vision_process
+def patch_qwen_vl_utils(vision_process):
     if hasattr(vision_process, '_patch'):
         return
     for key in [
@@ -500,7 +499,6 @@ def patch_qwen_vl_utils():
     ]:
         type_func = float if key == 'fps' else int
         setattr(vision_process, key.upper(), get_env_args(key, type_func, getattr(vision_process, key.upper())))
-    from qwen_vl_utils import vision_process
     _read_video_decord = vision_process._read_video_decord
 
     def _new_read_video_decord(ele: dict):
@@ -520,7 +518,8 @@ def get_model_tokenizer_qwen2_vl(*args, **kwargs):
         patch_output_clone(model.model.embed_tokens)
         patch_output_to_input_device(model.model.embed_tokens)
 
-    patch_qwen_vl_utils()
+    from qwen_vl_utils import vision_process
+    patch_qwen_vl_utils(vision_process)
     return model, tokenizer
 
 
@@ -596,6 +595,7 @@ register_model(
             ModelGroup([
                 Model('Qwen/Qwen2.5-VL-3B-Instruct', 'Qwen/Qwen2.5-VL-3B-Instruct'),
                 Model('Qwen/Qwen2.5-VL-7B-Instruct', 'Qwen/Qwen2.5-VL-7B-Instruct'),
+                Model('Qwen/Qwen2.5-VL-32B-Instruct', 'Qwen/Qwen2.5-VL-32B-Instruct'),
                 Model('Qwen/Qwen2.5-VL-72B-Instruct', 'Qwen/Qwen2.5-VL-72B-Instruct'),
             ]),
             ModelGroup([
@@ -631,7 +631,7 @@ register_model(
         get_model_tokenizer_qwen2_audio,
         model_arch=ModelArch.qwen2_audio,
         architectures=['Qwen2AudioForConditionalGeneration'],
-        requires=['transformers>=4.45', 'librosa'],
+        requires=['transformers>=4.45,<4.49', 'librosa'],
         tags=['audio'],
     ))
 
@@ -670,9 +670,10 @@ register_model(
 def get_model_tokenizer_ovis(*args, **kwargs):
     kwargs['attn_impl_keys'] = ['llm_attn_implementation']
     model, tokenizer = get_model_tokenizer_with_flash_attn(*args, **kwargs)
-    model.visual_tokenizer.to(model.dtype)
-    model.vte.to(model.dtype)
     if model is not None:
+        model.visual_tokenizer.to(model.dtype)
+        model.vte.to(model.dtype)
+
         model.generation_config.cache_implementation = None
         func_list = ['generate', 'forward', 'get_input_embeddings']
         use_submodel_func(model, 'llm', func_list)

@@ -3,8 +3,8 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Literal, Optional
 
 import torch
-from packaging import version
 import transformers
+from packaging import version
 
 from ..base import Template
 from ..constant import MLLMTemplateType
@@ -18,6 +18,7 @@ from .utils import ChatmlTemplateMeta
 
 
 class LlavaHfTemplate(Template):
+    placeholder_tokens = ['<image>']
 
     @property
     def image_token_index(self):
@@ -48,12 +49,12 @@ class LlavaHfTemplate(Template):
                 for i, idx in enumerate(idx_list):
                     if 'image_sizes' in image_inputs:
                         orig_height, orig_width = image_inputs['image_sizes'][i].tolist()
-                        num_image_tokens = self.processor._get_number_of_features(orig_height, orig_width, height, width)
+                        num_image_tokens = self.processor._get_number_of_features(orig_height, orig_width, height,
+                                                                                  width)
                     else:
                         num_image_tokens = (height // self.processor.patch_size) * (
-                            width // self.processor.patch_size
-                        ) + self.processor.num_additional_image_tokens
-                    if self.processor.vision_feature_select_strategy == "default":
+                            width // self.processor.patch_size) + self.processor.num_additional_image_tokens
+                    if self.processor.vision_feature_select_strategy == 'default':
                         num_image_tokens -= 1
                     input_ids = input_ids[:added_tokens_len + idx] + [self.image_token_index] * num_image_tokens \
                         + input_ids[added_tokens_len + idx + 1:]
@@ -73,7 +74,7 @@ register_template(
         prompt=['USER: {{QUERY}}\nASSISTANT:'],
         chat_sep=['</s>'],
         suffix=['</s>'],
-        system_prefix=['<s>{{SYSTEM}}\n'], # add by ZSXM
+        system_prefix=['<s>{{SYSTEM}}\n'],
         tool_prompt=['TOOL: {{QUERY}}\nASSISTANT:'], # add by ZSXM
         template_cls=LlavaHfTemplate,
     ))
@@ -194,6 +195,8 @@ class LlavaOneVisionHfTemplate(Llava1_6HfTemplate):
             height, width = image_inputs['pixel_values'][0].shape[-2:]
             added_tokens_len = 0
             for idx, pixel_v, image_size in zip(idx_list, image_inputs['pixel_values'], image_inputs['image_sizes']):
+                if isinstance(image_size, torch.Tensor):
+                    image_size = image_size.tolist()
                 orig_height, orig_width = image_size
                 num_image_tokens = processor._get_number_of_features(orig_height, orig_width, height, width)
                 input_ids = input_ids[:added_tokens_len
@@ -215,7 +218,6 @@ register_template(
         MLLMTemplateType.llava_onevision_hf,
         default_system=None,
         template_cls=LlavaOneVisionHfTemplate,
-        placeholder_tokens=['<image>'],
     ))
 
 

@@ -2,7 +2,6 @@
 import os
 import platform
 import re
-from contextlib import nullcontext
 from copy import deepcopy
 from dataclasses import asdict, dataclass, field
 from functools import partial
@@ -142,7 +141,6 @@ def load_by_unsloth(args):
         dtype=args.torch_dtype,
         max_seq_length=args.max_length,
         load_in_4bit=args.quant_bits == 4,
-        trust_remote_code=True,
     )
     if isinstance(model, PeftModel):
         base_model = model.model
@@ -173,20 +171,19 @@ def get_model_tokenizer_from_local(model_dir: str,
         model_config.keys_to_ignore_at_inference = []
     if 'past_key_values' not in model_config.keys_to_ignore_at_inference:
         model_config.keys_to_ignore_at_inference.append('past_key_values')
-    model_info.config = model_config
 
     torch_dtype = model_info.torch_dtype
     model_config.torch_dtype = torch_dtype
     HfConfigFactory.compat_zero3(model_config)
     rope_scaling = kwargs.get('rope_scaling')
-    if rope_scaling is not None:
+    if rope_scaling:
         HfConfigFactory.set_config_attr(model_config, 'rope_scaling', rope_scaling)
 
     if tokenizer is None:
         tokenizer = AutoTokenizer.from_pretrained(model_dir, trust_remote_code=True)
 
     num_labels = model_info.num_labels or getattr(model_config, 'num_labels', None)
-    if num_labels and model_info.task_type != 'causal_lm':
+    if num_labels and model_info.task_type == 'seq_cls':
         model_info.num_labels = num_labels
         model_config.num_labels = num_labels
 
@@ -201,19 +198,11 @@ def get_model_tokenizer_from_local(model_dir: str,
             except ValueError:
                 model = None
 
-        if model_info.task_type == 'embedding' and automodel_class is None:
-            try:
-                model = AutoModel.from_pretrained(
-                    model_dir, config=model_config, torch_dtype=torch_dtype, trust_remote_code=True, **model_kwargs)
-                from swift.llm.model.patcher import patch_output_normalizer
-                patch_output_normalizer(model)
-            except ValueError:
-                model = None
-
         automodel_class = automodel_class or AutoModelForCausalLM
+        model_meta = kwargs['model_meta']
         if model is None:
-            if model_info.task_type == 'seq_cls':
-                context = partial(patch_automodel_for_sequence_classification, model_meta=kwargs['model_meta'])
+            if model_info.task_type == 'seq_cls' and not model_meta.is_reward:
+                context = partial(patch_automodel_for_sequence_classification, model_meta=model_meta)
             else:
                 context = partial(patch_automodel, automodel_class=automodel_class, model_info=model_info)
             with context():
@@ -225,6 +214,12 @@ def get_model_tokenizer_from_local(model_dir: str,
         has_remote_code = hasattr(model_config, 'auto_map') and automodel_class.__name__ in model_config.auto_map
         if has_remote_code and model._auto_class is None:
             model._auto_class = automodel_class.__name__
+
+        if model_info.task_type == 'embedding' and automodel_class.__name__ != 'AutoModel':
+            from swift.llm.model.patcher import patch_output_normalizer
+            patch_output_normalizer(model, model_meta=model_meta)
+
+    model_info.config = model_config if model is None else model.config
     return model, tokenizer
 
 
@@ -273,14 +268,11 @@ def get_default_device_map():
     if local_rank == -1:
         local_rank = 0
     if is_torch_npu_available():
-        return f'npu:{local_rank}'
+        return 'auto' if is_mp() else f'npu:{local_rank}'
     elif is_torch_mps_available():
         return f'mps:{local_rank}'
     elif is_torch_cuda_available():
-        if is_mp():
-            return 'auto'
-        else:
-            return f'cuda:{local_rank}'
+        return 'auto' if is_mp() else f'cuda:{local_rank}'
     else:
         return 'cpu'
 
@@ -342,7 +334,7 @@ def get_all_models() -> List[str]:
 def get_matched_model_meta(model_id_or_path: str) -> Optional[ModelMeta]:
     model_name = get_model_name(model_id_or_path).lower()
     for model_type, model_meta in MODEL_MAPPING.items():
-        model_group = model_meta.get_matched_model_group(model_name)
+        model_group = ModelMeta.get_matched_model_group(model_meta, model_name)
         if model_group is not None:
             model_meta = deepcopy(model_meta)
             for k, v in asdict(model_group).items():
@@ -544,6 +536,11 @@ def get_model_tokenizer(
         patch_getattr(processor.__class__, 'tokenizer')
     else:
         tokenizer = processor
+    problem_type = kwargs.get('problem_type')
+    if problem_type is None and model_info.num_labels == 1:
+        problem_type = 'regression'
+    if problem_type is not None:
+        model_info.config.problem_type = problem_type
     tokenizer.model_info = model_info
     tokenizer.model_meta = model_meta
 
