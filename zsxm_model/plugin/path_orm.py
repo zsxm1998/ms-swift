@@ -160,6 +160,21 @@ def extract_between_tags(text, start_tag, end_tag, include_tags=False, return_or
     return text[start_index:end_index + len(end_tag)] if include_tags else text[start_index + len(start_tag):end_index]
 
 
+def check_other_task_tag_exist(text, stag_set, exclude_tags=[]):
+    """测试是否存在其他任务的标签"""
+    if isinstance(exclude_tags, str):
+        exclude_tags = [exclude_tags]
+    for stag in stag_set - set(exclude_tags):
+        if stag in text:
+            return True
+    return False
+
+
+def has_chinese(text: str) -> bool:
+    """判断字符串中是否包含中文字符。"""
+    return re.search(r'[\u4e00-\u9fff]', text) is not None
+
+
 def parse_bbox_string(bbox_str, key_word='box'):
     """
     从形如 <bbox_list><box>160, 312, 254, 414</box>...</bbox_list> 中提取bbox列表
@@ -398,10 +413,10 @@ def seg_reward(gt_res, content_res, beta=0.5):
 class PathORM(ORM):
     def __init__(self,
                  tokenizer=None,
-                 cosine_min_len_value_wrong: float = -0.5,
-                 cosine_max_len_value_wrong: float = 0.0,
+                 cosine_min_len_value_wrong: float = 0.0,
+                 cosine_max_len_value_wrong: float = 0.1,
                  cosine_min_len_value_correct: float = 1.0,
-                 cosine_max_len_value_correct: float = 0.5,
+                 cosine_max_len_value_correct: float = 1.0,
                  cosine_max_len: int = 4096):
         self.tokenizer = tokenizer
         self.min_len_value_wrong = cosine_min_len_value_wrong
@@ -409,54 +424,71 @@ class PathORM(ORM):
         self.min_len_value_correct = cosine_min_len_value_correct
         self.max_len_value_correct = cosine_max_len_value_correct
         self.max_len = cosine_max_len
+        self.task_setags = {
+            'seg': ('<contour_list>', '</contour_list>'),
+            'det_no_class': ('<bbox_list>', '</bbox_list>'),
+            'det_with_class': ('<detection_result>', '</detection_result>')
+        }
+        self.stag_set = set(token for token, _ in self.task_setags.values())
 
     @staticmethod
     def cosfn(t, T, max_len_value, min_len_value):
         import math
         return min_len_value + (max_len_value - min_len_value) * (1 - math.cos(t * math.pi / T)) / 2
 
-    def __call__(self, completions, solution, task, **kwargs) -> List[float]:
+    def __call__(self, completions, solution, task, messages, **kwargs) -> List[float]:
         rewards = []
-        for content, gt, task_type in zip(completions, solution, task):
-            if task_type == 'seg':
-                stoken, etoken = '<contour_list>', '</contour_list>'
-            elif task_type == 'det_no_class':
-                stoken, etoken = '<bbox_list>', '</bbox_list>'
-            elif task_type == 'det_with_class':
-                stoken, etoken = '<detection_result>', '</detection_result>'
-                
+        for content, gt, task_type, msgs in zip(completions, solution, task, messages):
+            stag, etag = self.task_setags.get(task_type, (None, None))
             format_reward, acc_reward = 0., 0.
 
             # 计算各个类别的format_reward
             if task_type in ['choice']:
                 if think_format_with_suffix(content):
-                    format_reward = 0.7
+                    format_reward = 0.8
                     if think_format_no_suffix(content):
                         format_reward = 1.0
+                else:
+                    if content.count('<think>') == 1 and content.count('</think>') == 1 \
+                        and content.index('<think>') < content.index('</think>'):
+                        format_reward += 0.3
+                    if content.count('<answer>') == 1 and content.count('</answer>') == 1 \
+                        and content.index('<answer>') < content.index('</answer>'):
+                        format_reward += 0.4
             elif task_type in ['seg', 'det_no_class', 'det_with_class']:
-                if content.count(stoken) == 1 and content.count(etoken) == 1 \
-                    and content.index(stoken) < content.index(etoken):
+                format_reward = 0.1
+                if content.count(stag) == 1 and content.count(etag) == 1 \
+                    and content.index(stag) < content.index(etag):
                     format_reward = 1.0
                 elif check_negative_exist(content):
                     format_reward = 1.0
+                elif check_other_task_tag_exist(content, self.stag_set, stag):
+                    format_reward = 0.0
             else:
                 raise ValueError(f'task "{task_type}" not supported')
             
             # 计算各个类别的acc_reward
             try:
-                if format_reward > 0:
+                if format_reward > 0.5: # 只有格式符合基本要求才计算acc_reward
                     if task_type in ['choice']:
+                        # 提取gt和content中的选项标签
                         gt_choice = extract_choice_label(gt) # 选项序号或False
-                        answer_content = extract_between_tags(content, '<answer>', '</answer>')
-                        content_choice = extract_choice_label(answer_content) # 选项序号或False
+                        content_answer = extract_between_tags(content, '<answer>', '</answer>')
+                        content_choice = extract_choice_label(content_answer) # 选项序号或False
+
+                        # 若标签符合则赋予1.0的离散reward
+                        is_correct = False
                         if gt_choice and content_choice and gt_choice == content_choice:
                             acc_reward = 1.0
+                            is_correct = True
                         elif not gt_choice and check_negative_exist(gt) \
-                            and not content_choice and check_negative_exist(answer_content):
+                            and not content_choice and check_negative_exist(content_answer):
                             acc_reward = 1.0
-                        # 计算cosine reward（这里由于参数暂时有bug，采用和官方同样的逻辑，后面需要修改）
+                            is_correct = True
+                        
+                        # 若tokenzier存在则计算长度reward
                         if self.tokenizer is not None:
-                            if acc_reward >= 1.0:
+                            if is_correct:
                                 # Swap min/max for correct answers
                                 max_len_value = self.max_len_value_correct
                                 min_len_value = self.min_len_value_correct
@@ -465,11 +497,36 @@ class PathORM(ORM):
                                 min_len_value = self.min_len_value_wrong
                             gen_len = len(self.tokenizer.encode(extract_between_tags(content, '<think>', '</think>')))
                             acc_reward = self.cosfn(gen_len, self.max_len, max_len_value, min_len_value)
+                        
+                        # 考虑思考语言对reward的影响
+                        # language_inconsistency = False
+                        # # 如果确定gt有中文，则content中的思考部分必须有中文
+                        # if has_chinese(gt):
+                        #     language_inconsistency = not has_chinese(extract_between_tags(content, '<think>', '</think>'))
+                        # # 排除solution只有选项的情况，其他情况下若solution中没有中文则可以完全确认是英文
+                        # elif not gt_choice or gt_choice != gt:
+                        #     language_inconsistency = has_chinese(extract_between_tags(content, '<think>', '</think>'))
+                        user_last_query = [m['content'] for m in msgs if m['role'] == 'user'][-1]
+                        language_inconsistency = has_chinese(user_last_query) \
+                            != has_chinese(extract_between_tags(content, '<think>', '</think>'))
+                        
+                        # 如果存在语言不一致
+                        if language_inconsistency:
+                            if is_correct:
+                                if self.tokenizer is not None:
+                                    acc_reward = min(self.min_len_value_correct, self.max_len_value_correct) - 0.1
+                                else:
+                                    acc_reward = 0.9
+                            else:
+                                if self.tokenizer is not None:
+                                    acc_reward = min(self.min_len_value_wrong, self.max_len_value_wrong) - 0.1
+                                else:
+                                    acc_reward = -0.1
                     elif task_type in ['seg', 'det_no_class', 'det_with_class']:
                         reward_func = globals().get(f"{task_type}_reward")
                         acc_reward = reward_func(
-                            extract_between_tags(gt, stoken, etoken, include_tags=True, return_origin=True),
-                            extract_between_tags(content, stoken, etoken, include_tags=True, return_origin=True)
+                            extract_between_tags(gt, stag, etag, include_tags=True, return_origin=True),
+                            extract_between_tags(content, stag, etag, include_tags=True, return_origin=True)
                         )
             except:
                 acc_reward = 0.0
