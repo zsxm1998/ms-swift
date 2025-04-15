@@ -35,6 +35,8 @@ class LLMTemplateType:
 
     chatglm2 = 'chatglm2'
     glm4 = 'glm4'
+    glm4_z1 = 'glm4_z1'
+    glm4_z1_rumination = 'glm4_z1_rumination'
     codegeex4 = 'codegeex4'
     longwriter_llama = 'longwriter_llama'
 
@@ -92,6 +94,7 @@ class MLLMTemplateType:
     qwen_audio = 'qwen_audio'
     qwen2_vl = 'qwen2_vl'
     qwen2_5_vl = 'qwen2_5_vl'
+    qwen2_5_omni = 'qwen2_5_omni'
     qwen2_audio = 'qwen2_audio'
     qwen2_gme = 'qwen2_gme'
     qvq = 'qvq'
@@ -101,6 +104,7 @@ class MLLMTemplateType:
 
     llama3_1_omni = 'llama3_1_omni'
     llama3_2_vision = 'llama3_2_vision'
+    llama4 = 'llama4'
 
     llava1_5_hf = 'llava1_5_hf'
     llava1_6_mistral_hf = 'llava1_6_mistral_hf'
@@ -160,6 +164,7 @@ class MLLMTemplateType:
     got_ocr2 = 'got_ocr2'
     got_ocr2_hf = 'got_ocr2_hf'
     step_audio = 'step_audio'
+    kimi_vl = 'kimi_vl'
 
     idefics3 = 'idefics3'
     pixtral = 'pixtral'

@@ -4,6 +4,7 @@ import inspect
 import math
 import os
 import re
+from contextlib import contextmanager, nullcontext
 from copy import deepcopy
 from dataclasses import asdict
 from functools import partial, wraps
@@ -321,6 +322,9 @@ class Template(ProcessorMixin):
             added_tokens_len += token_len - 1
         return input_ids, labels
 
+    def compute_loss_context(self, model, inputs):
+        return nullcontext()
+
     def _rlhf_encode(self, inputs: StdTemplateInputs) -> Dict[str, Any]:
         chosen_inputs, rejected_inputs = inputs, deepcopy(inputs)
         assert chosen_inputs.rejected_response is not None, f'inputs: {inputs}'
@@ -451,6 +455,28 @@ class Template(ProcessorMixin):
             encoded['position_ids'] = list(range(len(encoded['labels'])))
         return encoded
 
+    def packing_row(self, row: List[Tuple[Dict[str, Any], int]]) -> Dict[str, Any]:
+        packed = {}
+        keys = set()
+        for r in row:
+            keys.update(r[0].keys())
+        for key in keys:
+            if key == 'labels':
+                labels_list = []
+                for x in row:
+                    labels = x[0][key]
+                    # https://github.com/huggingface/transformers/pull/31629
+                    labels[0] = -100
+                    labels_list.append(labels)
+                packed[key] = sum(labels_list, start=[])
+            elif key in {'input_ids', 'loss_scale'}:
+                packed[key] = sum((x[0][key] for x in row), start=[])
+        if 'position_ids' not in packed:
+            packed['position_ids'] = sum((list(range(x[1])) for x in row), start=[])
+
+        packed.update(self._data_collator_mm_data([r[0] for r in row]))
+        return packed
+
     def _post_encode(self, model: nn.Module, inputs: Dict[str, Any]) -> Dict[str, Any]:
         return inputs
 
@@ -470,14 +496,14 @@ class Template(ProcessorMixin):
         idxs = logprobs.argsort(descending=True, dim=-1)[:top_logprobs].tolist()
         logprobs = logprobs.tolist()
         return {
-            'content': {
+            'content': [{
                 'index': pred,
                 'logprobs': [logprobs[p] for p in pred] if isinstance(pred, (list, tuple)) else logprobs[pred],
                 'top_logprobs': [{
                     'index': idx,
                     'logprob': logprobs[idx]
                 } for idx in idxs]
-            }
+            }]
         }
 
     @staticmethod
@@ -536,6 +562,8 @@ class Template(ProcessorMixin):
         raise NotImplementedError
 
     def generate(self, model, *args, **kwargs):
+        if 'use_model_defaults' in inspect.signature(model.generate).parameters and 'use_model_defaults' not in kwargs:
+            kwargs['use_model_defaults'] = False
         return model.generate(*args, **kwargs)
 
     def _skip_stop_decode(self, generate_ids: List[int], is_finished: bool, **decode_kwargs) -> Any:
@@ -1001,6 +1029,13 @@ class Template(ProcessorMixin):
                 if loss_scale is not None:
                     loss_scale = loss_scale[:self.max_length]
             else:
+                if len(input_ids) > self.max_length:
+                    logger.warning_once(
+                        'Input data was left-truncated because its length exceeds `max_length` (input length: '
+                        f'{len(input_ids)}, max_length: {self.max_length}). '
+                        'This may cause loss of important tokens (e.g., image tokens) and lead to errors. '
+                        'To avoid this, consider increasing `max_length` or pre-filtering long sequences.',
+                        hash_id='max_length_check')
                 input_ids = input_ids[-self.max_length:]
                 if labels is not None:
                     labels = labels[-self.max_length:]
@@ -1031,6 +1066,17 @@ class Template(ProcessorMixin):
             val = inputs['generate_ids']
         for v in val:
             self.print_inputs({k: v.tolist()})
+
+    @staticmethod
+    def _split_list(inputs: List[int], x: int) -> List[List[int]]:
+        idxs = findall(inputs, x)
+        idxs.append(len(inputs))
+        res = []
+        lo = 0
+        for idx in idxs:
+            res.append(inputs[lo:idx])
+            lo = idx + 1
+        return res
 
     def replace_video2image(self, load_video_func, inputs, replace_tag: Callable) -> List[Context]:
         context_list = []
@@ -1158,6 +1204,14 @@ class Template(ProcessorMixin):
                 res += b.pop(attr_name)
         return res
 
+    @staticmethod
+    def concat_tensor(batch: List[Dict[str, Any]], attr_name: str, dim: int) -> Optional[torch.Tensor]:
+        res = []
+        for b in batch:
+            if b.get(attr_name) is not None:
+                res.append(b.pop(attr_name))
+        return torch.concat(res, dim=dim) if res else None
+
     def _rlhf_data_collator(self,
                             batch: List[Dict[str, Any]],
                             *,
@@ -1240,8 +1294,10 @@ class Template(ProcessorMixin):
         res = {}
         if packing_mode:
             # only support llm
-            for k in ['input_ids', 'labels', 'position_ids']:
-                res[k] = [self.gather_list(batch, k)]
+            for k in ['input_ids', 'labels', 'position_ids', 'loss_scale']:
+                v = self.gather_list(batch, k)
+                if v:
+                    res[k] = [v]
         else:
             inputs_embeds = [b['inputs_embeds'] for b in batch if b.get('inputs_embeds') is not None]
             input_ids = [b['input_ids'] for b in batch if b.get('input_ids') is not None]
@@ -1290,6 +1346,15 @@ class Template(ProcessorMixin):
             res[key] = self._pad_sequence(res[key], pad_value)
 
         # multimodal
+        res.update(self._data_collator_mm_data(batch))
+        if use_torchacc() or self.sequence_parallel_size > 1:
+            res = self._torchacc_xtuner_data_collator(res, padding_to, self.tokenizer, padding_side)
+
+        return res
+
+    def _data_collator_mm_data(self, batch: List[Dict[str, Any]]) -> Dict[str, Any]:
+        # multimodal
+        res = {}
         pixel_values = [b['pixel_values'] for b in batch if b.get('pixel_values') is not None]
         if len(pixel_values) > 0:
             res['pixel_values'] = torch.concat(pixel_values)
@@ -1301,9 +1366,6 @@ class Template(ProcessorMixin):
         pixel_values_videos = [b['pixel_values_videos'] for b in batch if b.get('pixel_values_videos') is not None]
         if len(pixel_values_videos) > 0:
             res['pixel_values_videos'] = torch.concat(pixel_values_videos)
-        if use_torchacc() or self.sequence_parallel_size > 1:
-            res = self._torchacc_xtuner_data_collator(res, padding_to, self.tokenizer, padding_side)
-
         return res
 
     def _torchacc_xtuner_data_collator(self, res, padding_to, tokenizer, padding_side):
@@ -1467,3 +1529,27 @@ class Template(ProcessorMixin):
         else:
             result_str += tokenizer.decode(input_ids[e:], **tokenizer_kwargs)
         return result_str
+
+    @staticmethod
+    @contextmanager
+    def _patch_flash_attention_forward(modeling_module, position_ids, use_new_func: bool = False):
+        _origin_flash_attention_forward = modeling_module._flash_attention_forward
+
+        def _flash_attention_forward(*args, **kwargs):
+            if use_new_func:
+                from transformers.modeling_flash_attention_utils import (_flash_attention_forward as
+                                                                         flash_attention_forward)
+                if args and isinstance(args[0], nn.Module):
+                    args = args[1:]
+                if 'is_causal' not in kwargs:
+                    kwargs['is_causal'] = True
+            else:
+                flash_attention_forward = _origin_flash_attention_forward
+            kwargs['position_ids'] = position_ids
+            return flash_attention_forward(*args, **kwargs)
+
+        modeling_module._flash_attention_forward = _flash_attention_forward
+        try:
+            yield
+        finally:
+            modeling_module._flash_attention_forward = _origin_flash_attention_forward
