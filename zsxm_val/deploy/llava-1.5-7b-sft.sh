@@ -3,6 +3,7 @@ CUDA_VISIBLE_DEVICES=4,5,6,7 \
 MAX_PIXELS=112896 \
 swift app \
     --model zsxm_checkpoint/nips/1_sft/llava-1.5-7b_0306_full_VAL_2/v0-20250309-202547/checkpoint-9030 \
+    --served_model_name checkpoint-9030 \
     --studio_title OmniPT-LLaVA-1.5-7B \
     --stream true \
     --lang zh \

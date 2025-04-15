@@ -8,7 +8,7 @@ NPROC_PER_NODE=7 \
 swift rlhf \
     --rlhf_type grpo \
     --model ./zsxm_checkpoint/nips/1_sft/qwen2-vl-7b_0306_full_VAL_2/v0-20250307-021757/checkpoint-9022 \
-    --output_dir ./zsxm_checkpoint/nips/3_rft/qwen2-vl-7b_0306_full_VAL_2_v0#sft#full_bs112_temp1.1 \
+    --output_dir ./zsxm_checkpoint/nips/3_rft/qwen2-vl-7b_0306_full_VAL_2_v0#sft#full_bs112_temp1.1_VAL \
     --external_plugins ./zsxm_model/plugin/path_orm.py \
     --reward_funcs pathorm \
     --cosine_min_len_value_wrong 0.0 \
@@ -29,6 +29,8 @@ swift rlhf \
               ./zsxm_dataset/nips/3_rft/06_cancer_in_structure.json \
               ./zsxm_dataset/nips/3_rft/07_private_patch_choice.json#4500 \
     --attn_impl flash_attn \
+    --freeze_vit false \
+    --freeze_aligner false \
     --deepspeed zero2 \
     --max_length 8192 \
     --max_completion_length 4096 \

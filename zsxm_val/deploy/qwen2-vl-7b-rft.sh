@@ -1,9 +1,9 @@
 # pipeline_parallel_size设置为2时推理速度显著慢于1
-CUDA_VISIBLE_DEVICES=0,1,2,3 \
+CUDA_VISIBLE_DEVICES=4,5,6,7 \
 MAX_PIXELS=$((336*336)) \
 swift app \
-    --model zsxm_checkpoint/nips/1_sft/qwen2-vl-7b_0306_full_VAL_2/v0-20250307-021757/checkpoint-9022 \
-    --studio_title OmniPT-Qwen2-VL-7B-SFT \
+    --model zsxm_checkpoint/nips/3_rft/qwen2-vl-7b_0306_full_VAL_2_v0#sft#full_bs112_temp1.1_VAL/v0-20250331-211233/checkpoint-1090 \
+    --studio_title OmniPT-Qwen2-VL-7B-RFT \
     --stream true \
     --lang zh \
     --infer_backend vllm \
@@ -15,5 +15,5 @@ swift app \
     --pipeline_parallel_size 1 \
     --tensor_parallel_size 4 \
     --temperature 1 \
-    --server_port 8100
+    --server_port 8200
     
