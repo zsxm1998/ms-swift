@@ -1,4 +1,5 @@
 # ckpt命名规则：训练类型/模型_数据集_训练方式（full、lora）_模型训练部分（V：vit，A：aligner，L：llm）_epoch数
+# 这个脚本zero3不能变，用zero2就爆显存
 CUDA_VISIBLE_DEVICES="0,1,2,3,4,5,6,7" \
 NPROC_PER_NODE=8 \
 swift sft \
@@ -20,8 +21,8 @@ swift sft \
     --max_pixels $((1280*28*28)) \
     --truncation_strategy right \
     --num_train_epochs 2 \
-    --per_device_train_batch_size 2 \
-    --gradient_accumulation_steps 8 \
+    --per_device_train_batch_size 1 \
+    --gradient_accumulation_steps 16 \
     --warmup_ratio 0.05 \
     --eval_strategy no \
     --save_strategy steps \

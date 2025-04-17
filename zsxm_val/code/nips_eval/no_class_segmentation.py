@@ -123,7 +123,9 @@ def visualize_contour(vis_dir, data_list):
 
 
 def main(args):
-    dataset = get_dataset(args, parse_func=parse_polygon_string, stag='<contour_list>', etag='</contour_list>')
+    all_questions = {question for sublist in question_lists.values() for question in sublist}
+    dataset = get_dataset(args, parse_func=parse_polygon_string, stag='<contour_list>',
+                          etag='</contour_list>', valid_questions=all_questions)
 
     results_dict = {key: [] for key in question_lists}
     unknown_questions = set()

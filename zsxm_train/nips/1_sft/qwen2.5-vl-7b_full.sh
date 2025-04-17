@@ -4,7 +4,7 @@ NPROC_PER_NODE=8 \
 swift sft \
     --output_dir ./zsxm_checkpoint/nips/1_sft/qwen2.5-vl-7b_0415_full_VAL_2 \
     --model Qwen/Qwen2.5-VL-7B-Instruct \
-    --deepspeed zero2 \
+    --deepspeed zero3 \
     --torch_dtype bfloat16 \
     --train_type full \
     --gradient_checkpointing true \
@@ -17,8 +17,8 @@ swift sft \
     --max_pixels $((1280*28*28)) \
     --truncation_strategy right \
     --num_train_epochs 2 \
-    --per_device_train_batch_size 1 \
-    --gradient_accumulation_steps 16 \
+    --per_device_train_batch_size 2 \
+    --gradient_accumulation_steps 8 \
     --learning_rate 2e-5 \
     --eval_strategy no \
     --save_strategy epoch \

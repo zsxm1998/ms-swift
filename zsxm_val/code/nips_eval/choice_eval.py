@@ -72,7 +72,7 @@ def get_dataset(args):
     return dataset
 
 
-def evaluate(args):
+def main(args):
     dataset = get_dataset(args)
     results_dict = {key:{'names':[], 'gt':[], 'pr':[]} for key in question_lists}
     total_count, correct_count = 0, 0
@@ -112,9 +112,20 @@ def evaluate(args):
                 continue
             break
         else:
-            if question not in unknown_questions:
+            # 单独处理未见问题
+            if args.report_unknown_question and question not in unknown_questions:
                 print(f'Unknown question: {question}')
                 unknown_questions.add(question)
+            if 'Unknown Questions' not in results_dict:
+                results_dict['Unknown Questions'] = {'names': None, 'gt': [], 'pr': []}
+            gtlabel = extract_choice_label(gt) or 'Not_Chosen'
+            results_dict['Unknown Questions']['gt'].append(gtlabel)
+            pred = extract_between_tags(pred, '<answer>', '</answer>', return_origin=True)
+            prlabel = extract_choice_label(pred) or 'Not_Chosen'
+            results_dict['Unknown Questions']['pr'].append(prlabel)
+            total_count += 1
+            if gtlabel == prlabel:
+                correct_count += 1
 
     print(f'Overall accuracy: {correct_count/total_count:.2%} ({correct_count}/{total_count})')
     for key, value in results_dict.items():
@@ -123,7 +134,8 @@ def evaluate(args):
         print(f'---------------------[{key}]---------------------')
         print(f'Accuracy: {metrics.accuracy_score(value["gt"], value["pr"]):.2%}',
               f'Balanced Accuracy: {metrics.balanced_accuracy_score(value["gt"], value["pr"]):.2%}')
-        print(metrics.classification_report(value['gt'], value['pr'], digits=4, zero_division=0, labels=list(range(len(value['names']))), target_names=value['names']))
+        labels = None if value['names'] is None else list(range(len(value['names'])))
+        print(metrics.classification_report(value['gt'], value['pr'], digits=4, zero_division=0, labels=labels, target_names=value['names']))
 
 
 if __name__ == '__main__':
@@ -131,7 +143,8 @@ if __name__ == '__main__':
     parser.add_argument('--result_file', type=str, required=True, help='path to the generation result jsonl file')
     parser.add_argument('--gt_file', type=str, default=None, help='path to groundtruth file')
     parser.add_argument('--dataset', type=str, default=None, help='only evaluate images of which path contains the dataset name')
+    parser.add_argument('--report_unknown_question', action='store_true', help='report unknown question')
     args = parser.parse_args()
     if args.dataset is not None: # for fnmatch
         args.dataset = '*' + args.dataset + '*'
-    evaluate(args)
+    main(args)

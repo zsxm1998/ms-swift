@@ -70,13 +70,16 @@ question_lists = {
 }
 
 
-def get_dataset(args, parse_func=parse_bbox_string, stag='<bbox_list>', etag='</bbox_list>', null_func=list):
+def get_dataset(args, parse_func=parse_bbox_string, stag='<bbox_list>', etag='</bbox_list>', null_func=list, valid_questions=None):
     dataset, gt_dataset = [], None
     res_dataset = load_jsonl(args.result_file)
     if args.gt_file is not None:
         gt_dataset = load_json(args.gt_file) if args.gt_file.endswith('.json') else load_json(args.gt_file)
         assert len(gt_dataset) == len(res_dataset), f'{len(gt_dataset)=} but {len(res_dataset)}'
     for i, resdata in enumerate(res_dataset):
+        question = resdata['prompt'].replace('<image>','').strip()
+        if valid_questions is not None and question not in valid_questions:
+            continue
         if gt_dataset is not None:
             gtdata = gt_dataset[i]
             assert gtdata.get('question_id', i) == resdata.get('question_id', i), f'{gtdata.get("question_id", i)=} but {resdata.get("question_id", i)=}'
@@ -89,13 +92,16 @@ def get_dataset(args, parse_func=parse_bbox_string, stag='<bbox_list>', etag='</
                 continue
         else:
             image = None
-        question = resdata['prompt'].replace('<image>','').strip()
         gt_answer = extract_between_tags(resdata['gt_answer'], stag, etag, include_tags=True, return_origin=True)
         model_response = extract_between_tags(resdata['model_response'], stag, etag, include_tags=True, return_origin=True)
         if check_negative_exist(gt_answer):
             true_boxes = null_func()
         else:
-            true_boxes = parse_func(gt_answer)
+            try:
+                true_boxes = parse_func(gt_answer)
+            except:
+                print(f"Error parsing ground truth: {resdata['gt_answer']}")
+                raise
         try:
             if check_negative_exist(model_response):
                 pred_boxes = null_func()
@@ -181,7 +187,8 @@ def visualize_bbox(vis_dir, data_list):
 
 
 def main(args):
-    dataset = get_dataset(args)
+    all_questions = {question for sublist in question_lists.values() for question in sublist}
+    dataset = get_dataset(args, valid_questions=all_questions)
 
     results_dict = {key: [] for key in question_lists}
     unknown_questions = set()
