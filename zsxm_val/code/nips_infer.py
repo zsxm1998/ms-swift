@@ -78,6 +78,7 @@ def main(args):
         engine = VllmEngine(
             model_id_or_path=args.model_path,
             gpu_memory_utilization=0.9,
+            tensor_parallel_size=args.tensor_parallel_size,
             enable_lora=args.lora_path is not None,
             max_lora_rank=16,
             use_async_engine=False,
@@ -96,7 +97,7 @@ def main(args):
 
     # 准备推理
     infer_kwargs = {'request_config': RequestConfig(max_tokens=args.max_tokens, temperature=args.temperature)}
-    infer_kwargs['use_tqdm'] = True if args.batch_size > 1 else False
+    infer_kwargs['use_tqdm'] = False #True if args.batch_size > 1 else False
     if args.lora_path:
         infer_kwargs['adapter_request'] = AdapterRequest('lora1', args.lora_path)
     if args.vllm_model:
@@ -105,17 +106,29 @@ def main(args):
     # 推理
     ans_file = open(args.answers_file, "w")
     if args.batch_size > 1:
-        infer_requests = [InferRequest(messages=x['messages'], images=x['images']) for x in dataset]
-        resp_list = engine.infer(infer_requests, **infer_kwargs)
-        for resp, data in zip(resp_list, dataset):
-            response = resp.choices[0].message.content
-            ans_file.write(json.dumps({
-                "question_id": data['question_id'],
-                "prompt": data['messages'][-1]['content'],
-                "model_response": response,
-                "gt_answer": data.get('answer', None),
-            }, ensure_ascii=False) + "\n")
-            ans_file.flush()
+        # infer_requests = [InferRequest(messages=x['messages'], images=x['images']) for x in dataset]
+        # resp_list = engine.infer(infer_requests, **infer_kwargs)
+        # for resp, data in zip(resp_list, dataset):
+        #     response = resp.choices[0].message.content
+        #     ans_file.write(json.dumps({
+        #         "question_id": data['question_id'],
+        #         "prompt": data['messages'][-1]['content'],
+        #         "model_response": response,
+        #         "gt_answer": data.get('answer', None),
+        #     }, ensure_ascii=False) + "\n")
+        #     ans_file.flush()
+        for i in tqdm(range(0, len(dataset), args.batch_size)):
+            infer_requests = [InferRequest(messages=data['messages'], images=data['images']) for data in dataset[i:i + args.batch_size]]
+            resp_list = engine.infer(infer_requests, **infer_kwargs)
+            for resp, data in zip(resp_list, dataset[i:i + args.batch_size]):
+                response = resp.choices[0].message.content
+                ans_file.write(json.dumps({
+                    "question_id": data['question_id'],
+                    "prompt": data['messages'][-1]['content'],
+                    "model_response": response,
+                    "gt_answer": data.get('answer', None),
+                }, ensure_ascii=False) + "\n")
+                ans_file.flush()
     else:
         for data in tqdm(dataset):
             infer_requests = [InferRequest(messages=data['messages'], images=data['images'])]
@@ -140,6 +153,7 @@ if __name__ == "__main__":
     # 如果使用模型推理，则需要在脚本内部署后端
     parser.add_argument("--model-path", type=str, default=None, help="模型路径")
     parser.add_argument("--lora-path", type=str, default=None, help="LoRA 权重路径，可选")
+    parser.add_argument("--tensor-parallel-size", "-tp", type=int, default=1, help="张量并行大小")
 
     # 使用现成的vllm客户端推理，不需要传模型参数，只需要传vllm接口
     parser.add_argument("--vllm-host", type=str, default='127.0.0.1', help="vllm接口地址")

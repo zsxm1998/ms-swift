@@ -1,5 +1,6 @@
 import os
 import os.path as osp
+import sys
 import fnmatch
 import cv2
 import argparse
@@ -100,7 +101,7 @@ def get_dataset(args, parse_func=parse_bbox_string, stag='<bbox_list>', etag='</
             try:
                 true_boxes = parse_func(gt_answer)
             except:
-                print(f"Error parsing ground truth: {resdata['gt_answer']}")
+                print(f"Error parsing ground truth: {resdata['gt_answer']}", file=sys.stderr)
                 raise
         try:
             if check_negative_exist(model_response):
@@ -108,9 +109,9 @@ def get_dataset(args, parse_func=parse_bbox_string, stag='<bbox_list>', etag='</
             else:
                 pred_boxes = parse_func(model_response)
         except:
-            print(f"Error parsing prediction: {resdata['model_response']}")
+            print(f"Error parsing prediction: {resdata['model_response']}", file=sys.stderr)
             traceback.print_exc()
-            print('——————————————————————————————————————————————————————————————————————')
+            print('——————————————————————————————————————————————————————————————————————', file=sys.stderr)
             pred_boxes = null_func()
         dataset.append((image, question, true_boxes, pred_boxes))
     return dataset
