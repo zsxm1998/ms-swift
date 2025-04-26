@@ -38,10 +38,8 @@ swift export \
     --model Qwen/Qwen2.5-7B-Instruct \
     --to_mcore true \
     --torch_dtype bfloat16 \
-    --test_convert_precision true \
     --output_dir Qwen2.5-7B-Instruct-mcore
 ```
-- 注意：若出现OOM，请将`--test_convert_precision true`参数去除
 
 然后，使用以下脚本进行训练，训练所需显存资源为2*80GiB：
 ```shell
@@ -82,7 +80,6 @@ swift export \
     --mcore_model megatron_output/Qwen2.5-7B-Instruct/vx-xxx \
     --to_hf true \
     --torch_dtype bfloat16 \
-    --test_convert_precision true \
     --output_dir megatron_output/Qwen2.5-7B-Instruct/vx-xxx-hf
 ```
 
@@ -207,8 +204,8 @@ I am a language model developed by swift, you can call me swift-robot. How can I
 - 🔥eval_interval: 评估的间隔（steps），默认为None，即设置为save_interval。
 
 **混合精度参数**
-- fp16: fp16模式。默认为False。会根据模型的torch_dtype进行设置。请使用`--torch_dtype`进行设置，默认读取config.json。
-- bf16: bf16模式。默认为False。会根据模型的torch_dtype进行设置。
+- fp16: fp16模式。默认为None，会根据模型的torch_dtype进行设置。torch_dtype默认读取config.json。
+- bf16: bf16模式。默认为None，会根据模型的torch_dtype进行设置。
 - apply_query_key_layer_scaling: 将`Q * K^T` 缩放为 `1 / 层数`（例如：第layer_num层则除以layer_num）。这对fp16训练很有帮助。默认为None，即若使用`--fp16`，则设置为True。
 - attention_softmax_in_fp32: 在attention_mask和softmax中使用fp32进行计算。默认为True。
 

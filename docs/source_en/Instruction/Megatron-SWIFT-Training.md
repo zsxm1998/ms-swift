@@ -40,10 +40,8 @@ swift export \
     --model Qwen/Qwen2.5-7B-Instruct \
     --to_mcore true \
     --torch_dtype bfloat16 \
-    --test_convert_precision true \
     --output_dir Qwen2.5-7B-Instruct-mcore
 ```
-- Note: If an OOM (Out Of Memory) error occurs, please remove the --test_convert_precision true parameter.
 
 Next, use the following script to start training. The required GPU memory resources are 2*80GiB:
 
@@ -86,7 +84,6 @@ swift export \
     --mcore_model megatron_output/Qwen2.5-7B-Instruct/vx-xxx \
     --to_hf true \
     --torch_dtype bfloat16 \
-    --test_convert_precision true \
     --output_dir megatron_output/Qwen2.5-7B-Instruct/vx-xxx-hf
 ```
 
@@ -216,8 +213,8 @@ seq_length: Defaults to None, meaning it is set to `max_length`. To restrict the
 
 **Mixed Precision Parameters**
 
-- fp16: FP16 mode. Default is False. Set according to the model's torch_dtype. Please use `--torch_dtype` to set it. By default, it reads from config.json.
-- bf16: BF16 mode. Default is False. Set according to the model's torch_dtype.
+- fp16: FP16 mode. The default is None, and it will be set according to the model's torch_dtype. The torch_dtype is read from the config.json by default.
+- bf16: BF16 mode. The default is None, and it will be set according to the model's torch_dtype.
 - apply_query_key_layer_scaling: Scales `Q * K^T` by `1 / layer number` (e.g., divide by layer_num for layer_num-th layer). This is helpful for FP16 training. Default is None, meaning that if `--fp16` is used, it will be set to True.
 - attention_softmax_in_fp32: Uses FP32 for computations in attention_mask and softmax. Default is True.
 

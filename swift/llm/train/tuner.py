@@ -51,7 +51,7 @@ def get_multimodal_target_regex(
     freeze_llm: bool = False,
     freeze_vit: bool = True,
     freeze_aligner: bool = True,
-    include_embedding: bool = True,
+    include_embedding: bool = False,
 ) -> str:
     model_arch = get_model_arch(model.model_meta.model_arch)
     modules = []
@@ -75,7 +75,7 @@ def get_multimodal_target_regex(
     target_modules = []
     for module in modules:
         target_modules += find_all_linears(model, model_arch, extra_layers, sub_module=module)
-    target_regex = rf'^({prefix_pattern})\..*\.({"|".join(target_modules)})$'
+    target_regex = rf'^({prefix_pattern}).*\.({"|".join(target_modules)})$'
     if rejected_pattern:
         target_regex = rf'(?!^({rejected_pattern}))' + target_regex
     return target_regex
