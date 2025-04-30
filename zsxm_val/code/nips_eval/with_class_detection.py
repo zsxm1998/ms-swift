@@ -1,5 +1,6 @@
 import os
 import os.path as osp
+import sys
 import cv2
 import argparse
 import numpy as np
@@ -34,6 +35,25 @@ question_lists = {
         'Detect all nerves and classify for invasion.', # NI_det 0730
     ],
 }
+
+
+def set_chinese_font_global():
+    """设置全局中文字体，避免每次手动指定 fontproperties。"""
+    preferred_fonts = [
+        "WenQuanYi Zen Hei",
+        "Noto Sans CJK JP",
+        "SimHei",
+    ]
+    for font_name in preferred_fonts:
+        try:
+            fm.findfont(font_name, fallback_to_default=False)  # 检查字体是否存在
+            plt.rcParams['font.sans-serif'] = [font_name]       # 成功就设置
+            plt.rcParams['axes.unicode_minus'] = False
+            print(f"[Info] 中文字体已设置为: {font_name}", file=sys.stderr)
+            return
+        except:
+            continue
+    print("[Warning] 未找到合适的中文字体，中文可能无法正常显示。", file=sys.stderr)
 
 
 def evaluate_multi_class_detection(data_list, iou_threshold=0.5):
@@ -155,19 +175,6 @@ def generate_distinct_colors(n):
     return rgb_colors
 
 
-def get_chinese_font():
-    preferred_fonts = [
-        "Noto Sans CJK SC",  # Google 开源字体，Linux 常见
-        "WenQuanYi Zen Hei", # Ubuntu 常见
-    ]
-    for font_name in preferred_fonts:
-        try:
-            return fm.FontProperties(fname=fm.findfont(font_name, fallback_to_default=False))
-        except:
-            continue
-    return fm.FontProperties()  # fallback 到系统默认字体
-
-
 def visualize_bbox(vis_dir, data_list):
     os.makedirs(vis_dir, exist_ok=True)
 
@@ -182,9 +189,6 @@ def visualize_bbox(vis_dir, data_list):
     distinct_colors = generate_distinct_colors(len(all_classes))
     color_map = {cls: rgb for cls, rgb in zip(all_classes, distinct_colors)}
 
-    # ========== Step 3: 设置字体以支持中文 ==========
-    zh_font = get_chinese_font()
-
     for image_path, _, gt_dict, pred_dict in data_list:
         img = cv2.imread(image_path, cv2.IMREAD_COLOR)
         if img is None:
@@ -193,7 +197,7 @@ def visualize_bbox(vis_dir, data_list):
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         H, W = img.shape[:2]
 
-        # ========== Step 4: 创建子图，左GT，右Pred ==========
+        # ========== Step 3: 创建子图，左GT，右Pred ==========
         fig, axs = plt.subplots(1, 3, figsize=(16, 6), gridspec_kw={'width_ratios': [1, 1, 0.2]})
         ax_gt, ax_pred, ax_legend = axs
         ax_gt.set_title("GT")
@@ -203,7 +207,7 @@ def visualize_bbox(vis_dir, data_list):
             ax.imshow(img)
             ax.axis('off')
 
-        # ========== Step 5: 可视化 bbox ==========
+        # ========== Step 4: 可视化 bbox ==========
         visible_classes = set()
 
         def draw_boxes(ax, box_dict):
@@ -213,23 +217,23 @@ def visualize_bbox(vis_dir, data_list):
                     x1, y1, x2, y2 = [int(coord / 1000 * W) if i % 2 == 0 else int(coord / 1000 * H) for i, coord in enumerate(box)]
                     rect = patches.Rectangle((x1, y1), x2 - x1, y2 - y1, linewidth=2, edgecolor=color, facecolor='none')
                     ax.add_patch(rect)
-                    ax.text(x1, y1 - 5, cls, fontsize=8, color=color, fontproperties=zh_font, bbox=dict(facecolor='white', alpha=0.5, edgecolor='none', boxstyle='round,pad=0.2'))
+                    ax.text(x1, y1 - 5, cls, fontsize=8, color=color, bbox=dict(facecolor='white', alpha=0.5, edgecolor='none', boxstyle='round,pad=0.2'))
                 if boxes:
                     visible_classes.add(cls)
 
         draw_boxes(ax_gt, gt_dict)
         draw_boxes(ax_pred, pred_dict)
 
-        # ========== Step 6: 绘制图例 ==========
+        # ========== Step 5: 绘制图例 ==========
         ax_legend.axis('off')
         y_offset = 1.0
         for cls in sorted(visible_classes):
             color = color_map[cls]
             ax_legend.add_patch(patches.Rectangle((0, y_offset - 0.05), 0.2, 0.04, color=color))
-            ax_legend.text(0.25, y_offset - 0.03, cls, transform=ax_legend.transAxes, fontsize=10, fontproperties=zh_font)
+            ax_legend.text(0.25, y_offset - 0.03, cls, transform=ax_legend.transAxes, fontsize=10)
             y_offset -= 0.07
 
-        # ========== Step 7: 保存图像 ==========
+        # ========== Step 6: 保存图像 ==========
         save_path = osp.join(vis_dir, osp.splitext(osp.basename(image_path))[0] + '.jpg')
         plt.tight_layout()
         plt.savefig(save_path, dpi=100)
@@ -282,6 +286,7 @@ def main(args):
 
 
 if __name__ == '__main__':
+    set_chinese_font_global()
     parser = argparse.ArgumentParser(description='evaluate no class detection', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--result_file', type=str, required=True, help='path to the generation result jsonl file')
     parser.add_argument('--gt_file', type=str, default=None, help='path to groundtruth file')

@@ -60,6 +60,11 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# Add think for ANSWER_FILE
+if [ -n "$THINK_FLAG" ]; then
+  ANSWER_FILE="${ANSWER_FILE%.jsonl}_think.jsonl"
+fi
+
 # Build Python arguments
 PYTHON_ARGS=(
   --model-path "$CKPT_DIR"
@@ -68,11 +73,12 @@ PYTHON_ARGS=(
 )
 
 # Add optional flags
-if [ -z "$THINK_FLAG" ]; then
+if [ -n "$THINK_FLAG" ]; then
   PYTHON_ARGS+=(--think)
+  RES_FILE="${RES_FILE%.log}_think.log"
 fi
 if [ -n "$TP_VALUE" ]; then
-  PYTHON_ARGS+=(--tp "$TP_VALUE")
+  PYTHON_ARGS+=(-tp "$TP_VALUE")
 fi
 if [ -n "$BATCH_SIZE" ]; then
   PYTHON_ARGS+=(--batch-size "$BATCH_SIZE")
