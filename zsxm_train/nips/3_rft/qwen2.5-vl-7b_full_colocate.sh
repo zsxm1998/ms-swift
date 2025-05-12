@@ -1,23 +1,26 @@
+# One GPU is left for vLLM inference acceleration. GPU memory: 8 * 80GiB
 # ckpt规则：开始权重#开始权重来源#RFT训练参数
 # 数据集总数：1798+4500+2000+2000+2494+326+4500=17618
-# batch_size: per_device_train_batch_size * gradient_accumulation_steps * NPROC_PER_NODE = 2*2*8 = 32
+# batch_size: per_device_train_batch_size * gradient_accumulation_steps * NPROC_PER_NODE = 2 * 8 * 8 = 128
 
 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
 NPROC_PER_NODE=8 \
+MAX_PIXELS=$((1280*28*28)) \
 swift rlhf \
     --rlhf_type grpo \
-    --model ./zsxm_checkpoint/nips/1_sft/qwen2-vl-7b_0306_full_VAL_2/v0-20250307-021757/checkpoint-9022 \
-    --output_dir ./zsxm_checkpoint/nips/3_rft/qwen2-vl-7b_0306_full_VAL_2_v0#sft#full_bs带设定_temp1.1 \
+    --model ./zsxm_checkpoint/nips/1_sft/qwen2.5-vl-7b_0415_full_VAL_2/v0-20250416-054620/checkpoint-9444 \
+    --output_dir ./zsxm_checkpoint/nips/3_rft/qwen2.5-vl-7b_0415_full_VAL_2_v0#sft#full_bs128_temp0.9 \
     --external_plugins ./zsxm_model/plugin/path_orm.py \
     --reward_funcs pathorm \
     --cosine_min_len_value_wrong 0.0 \
-    --cosine_max_len_value_wrong 0.4 \
+    --cosine_max_len_value_wrong 0.1 \
     --cosine_min_len_value_correct 1.0 \
-    --cosine_max_len_value_correct 0.6 \
+    --cosine_max_len_value_correct 1.0 \
     --use_vllm true \
-    --vllm_device auto \
-    --vllm_gpu_memory_utilization 0.5 \
+    --num_infer_workers 8 \
+    --vllm_gpu_memory_utilization 0.4 \
     --vllm_max_model_len 8192 \
+    --sleep_level 0 \
     --train_type full \
     --torch_dtype bfloat16 \
     --dataset ./zsxm_dataset/nips/3_rft/01_thumbnail_seg.json \
@@ -28,28 +31,26 @@ swift rlhf \
               ./zsxm_dataset/nips/3_rft/06_cancer_in_structure.json \
               ./zsxm_dataset/nips/3_rft/07_private_patch_choice.json#4500 \
     --attn_impl flash_attn \
-    --deepspeed zero2 \
+    --deepspeed zero3 \
     --max_length 8192 \
     --max_completion_length 4096 \
-    --max_pixels $((336*336)) \
+    --max_pixels $((1280*28*28)) \
     --num_train_epochs 1 \
     --per_device_train_batch_size 2 \
     --per_device_eval_batch_size 2 \
     --learning_rate 1e-6 \
-    --gradient_accumulation_steps 2 \
-    --eval_steps 200 \
-    --save_steps 200 \
-    --save_total_limit 2 \
+    --gradient_accumulation_steps 8 \
+    --eval_steps 125 \
+    --save_steps 125 \
+    --save_total_limit 1 \
     --logging_steps 1 \
     --warmup_ratio 0.05 \
+    --dataloader_num_workers 4 \
+    --dataset_num_proc 4 \
     --num_generations 8 \
-    --temperature 1.1 \
+    --temperature 0.9 \
     --log_completions true \
-    --report_to tensorboard \
-    --async_generate false \
-    --num_infer_workers 8 \
-    --tensor_parallel_size 4 \
-    --offload_optimizer true \
-    --offload_model true \
-    --gc_collect_after_offload true \
-    --sleep_level 1
+    --report_to wandb \
+    --epsilon_high 0.28 \
+    --dynamic_sample false \
+    --max_resample_times 3

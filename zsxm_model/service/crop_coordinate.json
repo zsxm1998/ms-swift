@@ -1,0 +1,770 @@
+{
+  "/c22073/WSI_datasets/HCC_grading/0/6M01.mrxs": [
+    8262,
+    57349,
+    96351,
+    160443
+  ],
+  "/c22073/WSI_datasets/HCC_grading/0/6M02.mrxs": [
+    22788,
+    72686,
+    98483,
+    168712
+  ],
+  "/c22073/WSI_datasets/HCC_grading/0/6M03.mrxs": [
+    25454,
+    92425,
+    84890,
+    196853
+  ],
+  "/c22073/WSI_datasets/HCC_grading/0/6M04.mrxs": [
+    23988,
+    98827,
+    98749,
+    197520
+  ],
+  "/c22073/WSI_datasets/HCC_grading/0/6M05.mrxs": [
+    20256,
+    63484,
+    99949,
+    184049
+  ],
+  "/c22073/WSI_datasets/HCC_grading/0/6M06.mrxs": [
+    42911,
+    97760,
+    99149,
+    196586
+  ],
+  "/c22073/WSI_datasets/HCC_grading/0/6M07.mrxs": [
+    18524,
+    92158,
+    81025,
+    177381
+  ],
+  "/c22073/WSI_datasets/HCC_grading/0/6M08.mrxs": [
+    29318,
+    106295,
+    95684,
+    197386
+  ],
+  "/c22073/WSI_datasets/HCC_grading/0/6M09.mrxs": [
+    39180,
+    93358,
+    103813,
+    209923
+  ],
+  "/c22073/WSI_datasets/HCC_grading/0/6M10.mrxs": [
+    16525,
+    100427,
+    98216,
+    188717
+  ],
+  "/c22073/WSI_datasets/HCC_grading/0/6M11.mrxs": [
+    12660,
+    101361,
+    95418,
+    194052
+  ],
+  "/c22073/WSI_datasets/HCC_grading/0/6M12.mrxs": [
+    29185,
+    107362,
+    94352,
+    219392
+  ],
+  "/c22073/WSI_datasets/HCC_grading/0/6M13.mrxs": [
+    34915,
+    104428,
+    85023,
+    217925
+  ],
+  "/c22073/WSI_datasets/HCC_grading/0/6M14.mrxs": [
+    32517,
+    91891,
+    102348,
+    171379
+  ],
+  "/c22073/WSI_datasets/HCC_grading/0/6M15.mrxs": [
+    4398,
+    72286,
+    111143,
+    202588
+  ],
+  "/c22073/WSI_datasets/HCC_grading/0/6M16.mrxs": [
+    32783,
+    98960,
+    92486,
+    189651
+  ],
+  "/c22073/WSI_datasets/HCC_grading/0/6M17.mrxs": [
+    20256,
+    83622,
+    102214,
+    172980
+  ],
+  "/c22073/WSI_datasets/HCC_grading/0/6M18.mrxs": [
+    25320,
+    89224,
+    86089,
+    198587
+  ],
+  "/c22073/WSI_datasets/HCC_grading/0/6M19.mrxs": [
+    25054,
+    78021,
+    90754,
+    191518
+  ],
+  "/c22073/WSI_datasets/HCC_grading/0/6M20.mrxs": [
+    10661,
+    94692,
+    102081,
+    194586
+  ],
+  "/c22073/WSI_datasets/HCC_grading/0/6M21.mrxs": [
+    16258,
+    80822,
+    107945,
+    195252
+  ],
+  "/c22073/WSI_datasets/HCC_grading/0/6M22.mrxs": [
+    17724,
+    88024,
+    110210,
+    180315
+  ],
+  "/c22073/WSI_datasets/HCC_grading/0/6M23.mrxs": [
+    38380,
+    106429,
+    89821,
+    179915
+  ],
+  "/c22073/WSI_datasets/HCC_grading/0/6M24.mrxs": [
+    15325,
+    72019,
+    84090,
+    174047
+  ],
+  "/c22073/WSI_datasets/HCC_grading/0/6M25.mrxs": [
+    11861,
+    70419,
+    88355,
+    187784
+  ],
+  "/c22073/WSI_datasets/HCC_grading/0/7M01.mrxs": [
+    36648,
+    59749,
+    93552,
+    172846
+  ],
+  "/c22073/WSI_datasets/HCC_grading/0/7M02.mrxs": [
+    16925,
+    84956,
+    96351,
+    214724
+  ],
+  "/c22073/WSI_datasets/HCC_grading/0/7M05.mrxs": [
+    41445,
+    95626,
+    112076,
+    185783
+  ],
+  "/c22073/WSI_datasets/HCC_grading/0/7M07.mrxs": [
+    29718,
+    68285,
+    93819,
+    198587
+  ],
+  "/c22073/WSI_datasets/HCC_grading/0/7M08.mrxs": [
+    21722,
+    102161,
+    109544,
+    195653
+  ],
+  "/c22073/WSI_datasets/HCC_grading/0/7M09.mrxs": [
+    25054,
+    78021,
+    95151,
+    179381
+  ],
+  "/c22073/WSI_datasets/HCC_grading/0/7M10.mrxs": [
+    41579,
+    103761,
+    95418,
+    180849
+  ],
+  "/c22073/WSI_datasets/HCC_grading/0/7M11.mrxs": [
+    29052,
+    100160,
+    89154,
+    181782
+  ],
+  "/c22073/WSI_datasets/HCC_grading/0/7M12.mrxs": [
+    37981,
+    138304,
+    96351,
+    201654
+  ],
+  "/c22073/WSI_datasets/HCC_grading/0/7M13.mrxs": [
+    20789,
+    86023,
+    90754,
+    183649
+  ],
+  "/c22073/WSI_datasets/HCC_grading/0/7M14.mrxs": [
+    23854,
+    80021,
+    92886,
+    194986
+  ],
+  "/c22073/WSI_datasets/HCC_grading/0/7M16.mrxs": [
+    22255,
+    83489,
+    83424,
+    212991
+  ],
+  "/c22073/WSI_datasets/HCC_grading/0/7M17.mrxs": [
+    34249,
+    91491,
+    67032,
+    175514
+  ],
+  "/c22073/WSI_datasets/HCC_grading/0/7M18.mrxs": [
+    46243,
+    89624,
+    107545,
+    201654
+  ],
+  "/c22073/WSI_datasets/HCC_grading/0/7M19.mrxs": [
+    29452,
+    88424,
+    99016,
+    188984
+  ],
+  "/c22073/WSI_datasets/HCC_grading/0/7M20.mrxs": [
+    15192,
+    86957,
+    96617,
+    186317
+  ],
+  "/c22073/WSI_datasets/HCC_grading/0/7M21.mrxs": [
+    39980,
+    82422,
+    91686,
+    216325
+  ],
+  "/c22073/WSI_datasets/HCC_grading/0/7M22.mrxs": [
+    16525,
+    70952,
+    81158,
+    211257
+  ],
+  "/c22073/WSI_datasets/HCC_grading/0/7M23.mrxs": [
+    20656,
+    97626,
+    108611,
+    209390
+  ],
+  "/c22073/WSI_datasets/HCC_grading/0/8M02.mrxs": [
+    26386,
+    92825,
+    106745,
+    181916
+  ],
+  "/c22073/WSI_datasets/HCC_grading/0/8M11.mrxs": [
+    23588,
+    75487,
+    101148,
+    207256
+  ],
+  "/c22073/WSI_datasets/HCC_grading/1/20110134.mrxs": [
+    6530,
+    22806,
+    112209,
+    150307
+  ],
+  "/c22073/WSI_datasets/HCC_grading/1/201122287.mrxs": [
+    10128,
+    91625,
+    112076,
+    180315
+  ],
+  "/c22073/WSI_datasets/HCC_grading/1/20115827.mrxs": [
+    27719,
+    77221,
+    117140,
+    196053
+  ],
+  "/c22073/WSI_datasets/HCC_grading/1/201208500.mrxs": [
+    37714,
+    73753,
+    97683,
+    176981
+  ],
+  "/c22073/WSI_datasets/HCC_grading/1/20124548.mrxs": [
+    11061,
+    99760,
+    96484,
+    200054
+  ],
+  "/c22073/WSI_datasets/HCC_grading/1/20125722.mrxs": [
+    13060,
+    62417,
+    101948,
+    176447
+  ],
+  "/c22073/WSI_datasets/HCC_grading/1/201257440.mrxs": [
+    22255,
+    83089,
+    117140,
+    190585
+  ],
+  "/c22073/WSI_datasets/HCC_grading/1/20130220.mrxs": [
+    13726,
+    51881,
+    105546,
+    156442
+  ],
+  "/c22073/WSI_datasets/HCC_grading/1/20130525.mrxs": [
+    31317,
+    87757,
+    101815,
+    178848
+  ],
+  "/c22073/WSI_datasets/HCC_grading/1/20131297.mrxs": [
+    30384,
+    104295,
+    110077,
+    201521
+  ],
+  "/c22073/WSI_datasets/HCC_grading/1/201323914.mrxs": [
+    15459,
+    82022,
+    111143,
+    181515
+  ],
+  "/c22073/WSI_datasets/HCC_grading/1/20190018.mrxs": [
+    21056,
+    96293,
+    97817,
+    187384
+  ],
+  "/c22073/WSI_datasets/HCC_grading/1/201908826-4.mrxs": [
+    14526,
+    123500,
+    75162,
+    226861
+  ],
+  "/c22073/WSI_datasets/HCC_grading/1/20191009.mrxs": [
+    12394,
+    106162,
+    114075,
+    216325
+  ],
+  "/c22073/WSI_datasets/HCC_grading/1/20191016.mrxs": [
+    17858,
+    87490,
+    102348,
+    171379
+  ],
+  "/c22073/WSI_datasets/HCC_grading/1/2019111673.mrxs": [
+    24921,
+    117231,
+    100082,
+    220326
+  ],
+  "/c22073/WSI_datasets/HCC_grading/1/20191133.mrxs": [
+    22389,
+    78821,
+    92353,
+    169912
+  ],
+  "/c22073/WSI_datasets/HCC_grading/1/2020015.mrxs": [
+    7729,
+    68152,
+    103547,
+    186717
+  ],
+  "/c22073/WSI_datasets/HCC_grading/1/20200205.mrxs": [
+    21189,
+    87357,
+    109411,
+    184183
+  ],
+  "/c22073/WSI_datasets/HCC_grading/1/20200287.mrxs": [
+    27186,
+    74153,
+    110343,
+    182449
+  ],
+  "/c22073/WSI_datasets/HCC_grading/1/20200505.mrxs": [
+    25853,
+    92958,
+    106212,
+    182182
+  ],
+  "/c22073/WSI_datasets/HCC_grading/1/202006212.mrxs": [
+    17324,
+    61350,
+    93819,
+    181515
+  ],
+  "/c22073/WSI_datasets/HCC_grading/2/201109016.mrxs": [
+    27986,
+    117765,
+    111543,
+    217792
+  ],
+  "/c22073/WSI_datasets/HCC_grading/2/201130149.mrxs": [
+    5064,
+    75754,
+    106079,
+    187384
+  ],
+  "/c22073/WSI_datasets/HCC_grading/2/201132264.mrxs": [
+    4131,
+    81088,
+    97150,
+    210056
+  ],
+  "/c22073/WSI_datasets/HCC_grading/2/201136461.mrxs": [
+    19190,
+    86690,
+    98616,
+    195119
+  ],
+  "/c22073/WSI_datasets/HCC_grading/2/201136466.mrxs": [
+    18124,
+    72953,
+    107412,
+    139637
+  ],
+  "/c22073/WSI_datasets/HCC_grading/2/20114108.mrxs": [
+    14126,
+    92158,
+    117140,
+    191785
+  ],
+  "/c22073/WSI_datasets/HCC_grading/2/201154041.mrxs": [
+    0,
+    91758,
+    117140,
+    201254
+  ],
+  "/c22073/WSI_datasets/HCC_grading/2/201200665-9.mrxs": [
+    11194,
+    99893,
+    99816,
+    206722
+  ],
+  "/c22073/WSI_datasets/HCC_grading/2/2012051-7.mrxs": [
+    18391,
+    71486,
+    102481,
+    189384
+  ],
+  "/c22073/WSI_datasets/HCC_grading/2/20120591-3.mrxs": [
+    10928,
+    102828,
+    114075,
+    219392
+  ],
+  "/c22073/WSI_datasets/HCC_grading/2/201212265-5.mrxs": [
+    44511,
+    116031,
+    97417,
+    219526
+  ],
+  "/c22073/WSI_datasets/HCC_grading/2/201238272.mrxs": [
+    0,
+    99093,
+    117140,
+    205522
+  ],
+  "/c22073/WSI_datasets/HCC_grading/2/201247862.mrxs": [
+    20123,
+    105362,
+    104213,
+    203121
+  ],
+  "/c22073/WSI_datasets/HCC_grading/2/201251654.mrxs": [
+    35715,
+    63484,
+    102481,
+    178581
+  ],
+  "/c22073/WSI_datasets/HCC_grading/2/201259490.mrxs": [
+    19590,
+    88290,
+    105413,
+    181249
+  ],
+  "/c22073/WSI_datasets/HCC_grading/2/20130118.mrxs": [
+    13060,
+    56815,
+    113542,
+    185250
+  ],
+  "/c22073/WSI_datasets/HCC_grading/2/20130287.mrxs": [
+    18124,
+    85623,
+    103147,
+    200454
+  ],
+  "/c22073/WSI_datasets/HCC_grading/2/201308152.mrxs": [
+    8929,
+    80822,
+    111010,
+    198453
+  ],
+  "/c22073/WSI_datasets/HCC_grading/2/20131359.mrxs": [
+    21189,
+    95226,
+    117140,
+    202054
+  ],
+  "/c22073/WSI_datasets/HCC_grading/2/20132864.mrxs": [
+    17191,
+    104161,
+    98749,
+    186717
+  ],
+  "/c22073/WSI_datasets/HCC_grading/2/201338679.mrxs": [
+    0,
+    86290,
+    117140,
+    224327
+  ],
+  "/c22073/WSI_datasets/HCC_grading/2/201351719.mrxs": [
+    10661,
+    71352,
+    99682,
+    194852
+  ],
+  "/c22073/WSI_datasets/HCC_grading/2/201356069.mrxs": [
+    9728,
+    47613,
+    94885,
+    166178
+  ],
+  "/c22073/WSI_datasets/HCC_grading/2/201360404.mrxs": [
+    11594,
+    80822,
+    117140,
+    211123
+  ],
+  "/c22073/WSI_datasets/HCC_grading/2/201361220.mrxs": [
+    0,
+    66951,
+    110077,
+    175247
+  ],
+  "/c22073/WSI_datasets/HCC_grading/2/20136152.mrxs": [
+    15859,
+    97359,
+    105812,
+    214991
+  ],
+  "/c22073/WSI_datasets/HCC_grading/2/1M12_lablewrong.mrxs": [
+    20123,
+    90691,
+    108478,
+    187517
+  ],
+  "/c22073/WSI_datasets/HCC_grading/3/201114429.mrxs": [
+    21189,
+    89357,
+    113542,
+    182982
+  ],
+  "/c22073/WSI_datasets/HCC_grading/3/20111801.mrxs": [
+    10928,
+    87223,
+    106612,
+    199654
+  ],
+  "/c22073/WSI_datasets/HCC_grading/3/201125513.mrxs": [
+    0,
+    65218,
+    110477,
+    207389
+  ],
+  "/c22073/WSI_datasets/HCC_grading/3/20112645.mrxs": [
+    0,
+    80822,
+    95151,
+    186317
+  ],
+  "/c22073/WSI_datasets/HCC_grading/3/201129928.mrxs": [
+    18657,
+    50013,
+    110610,
+    166711
+  ],
+  "/c22073/WSI_datasets/HCC_grading/3/201140300.mrxs": [
+    22788,
+    82289,
+    106346,
+    174580
+  ],
+  "/c22073/WSI_datasets/HCC_grading/3/20120024.mrxs": [
+    23988,
+    108296,
+    100748,
+    216992
+  ],
+  "/c22073/WSI_datasets/HCC_grading/3/201202723.mrxs": [
+    27719,
+    101494,
+    110343,
+    187250
+  ],
+  "/c22073/WSI_datasets/HCC_grading/3/20120986.mrxs": [
+    7729,
+    71753,
+    101548,
+    184049
+  ],
+  "/c22073/WSI_datasets/HCC_grading/3/201216259-4.mrxs": [
+    23321,
+    106429,
+    93019,
+    208723
+  ],
+  "/c22073/WSI_datasets/HCC_grading/3/201221648-3.mrxs": [
+    8662,
+    65351,
+    97284,
+    191785
+  ],
+  "/c22073/WSI_datasets/HCC_grading/3/201228058.mrxs": [
+    7330,
+    58682,
+    112342,
+    169112
+  ],
+  "/c22073/WSI_datasets/HCC_grading/3/20124325.mrxs": [
+    5464,
+    79888,
+    117140,
+    195919
+  ],
+  "/c22073/WSI_datasets/HCC_grading/3/20130793.mrxs": [
+    13860,
+    65484,
+    100615,
+    184183
+  ],
+  "/c22073/WSI_datasets/HCC_grading/3/2013153.mrxs": [
+    38247,
+    89357,
+    95951,
+    214991
+  ],
+  "/c22073/WSI_datasets/HCC_grading/3/201360633.mrxs": [
+    26786,
+    89357,
+    101015,
+    195386
+  ],
+  "/c22073/WSI_datasets/HCC_grading/3/201360910.mrxs": [
+    17324,
+    75887,
+    73562,
+    158709
+  ],
+  "/c22073/WSI_datasets/HCC_grading/3/201365818.mrxs": [
+    0,
+    73086,
+    117140,
+    184583
+  ],
+  "/c22073/WSI_datasets/HCC_grading/3/201365822.mrxs": [
+    0,
+    64684,
+    117140,
+    176847
+  ],
+  "/c22073/WSI_datasets/HCC_grading/3/1M07_lablewrong.mrxs": [
+    8262,
+    68685,
+    99282,
+    203921
+  ],
+  "/c22073/WSI_datasets/HCC_grading/3/2M15_lablewrong.mrxs": [
+    14926,
+    96826,
+    94618,
+    221126
+  ],
+  "/c22073/WSI_datasets/HCC_grading/4/201108057.mrxs": [
+    24121,
+    90558,
+    117140,
+    201387
+  ],
+  "/c22073/WSI_datasets/HCC_grading/4/20112874.mrxs": [
+    26920,
+    79355,
+    101681,
+    192052
+  ],
+  "/c22073/WSI_datasets/HCC_grading/4/201134349.mrxs": [
+    9062,
+    65751,
+    103147,
+    176847
+  ],
+  "/c22073/WSI_datasets/HCC_grading/4/201337639.mrxs": [
+    18524,
+    64684,
+    96617,
+    192585
+  ],
+  "/c22073/WSI_datasets/HCC_grading/4/201362995.mrxs": [
+    32250,
+    97093,
+    100748,
+    191385
+  ],
+  "/c22073/WSI_datasets/HCC_grading/4/201900280.mrxs": [
+    51973,
+    125900,
+    105679,
+    205122
+  ],
+  "/c22073/WSI_datasets/HCC_grading/4/20190452.mrxs": [
+    22122,
+    59749,
+    100215,
+    171513
+  ],
+  "/c22073/WSI_datasets/HCC_grading/4/20190981.mrxs": [
+    21989,
+    62283,
+    88755,
+    172580
+  ],
+  "/c22073/WSI_datasets/HCC_grading/4/201912098.mrxs": [
+    35715,
+    94292,
+    117140,
+    196053
+  ],
+  "/c22073/WSI_datasets/HCC_grading/4/202000585.mrxs": [
+    7996,
+    72286,
+    117140,
+    186717
+  ],
+  "/c22073/WSI_datasets/HCC_grading/4/202003036.mrxs": [
+    27453,
+    89091,
+    93552,
+    191118
+  ],
+  "/c22073/WSI_datasets/HCC_grading/4/202004521.mrxs": [
+    16525,
+    98960,
+    103547,
+    213657
+  ]
+}

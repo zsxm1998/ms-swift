@@ -16,7 +16,7 @@ if [ -d "$CKPT_DIR" ]; then
     echo "Error: CKPT_DIR basename must contain the word 'checkpoint'."
     exit 1
   fi
-  CKPT_NAME=$(echo "$CKPT_DIR" | awk -F'/' '{print $(NF-3)"/"$(NF-2)}')
+  CKPT_NAME=$(echo "$CKPT_DIR" | awk -F'/' '{split($(NF-1), v, "-"); split($NF, s, "-"); print $(NF-3)"/"$(NF-2)"|"v[1]"|"s[length(s)]}')
 else
   CKPT_NAME="0_baseline/$(basename "$CKPT_DIR")"
 fi
@@ -25,7 +25,7 @@ fi
 LOG_DIR="zsxm_val/results/nips/$CKPT_NAME"
 mkdir -p "$LOG_DIR"
 
-TASK_NAME="05_classify_nucleus_bbox"
+TASK_NAME="07_patch_subtyping"
 RES_FILE="$LOG_DIR/$TASK_NAME.log"
 QUESTION_FILE="zsxm_dataset/nips/9_test/$TASK_NAME.json"
 ANSWER_FILE="$LOG_DIR/z$TASK_NAME.jsonl"
@@ -95,7 +95,7 @@ python zsxm_val/code/nips_eval/choice_eval.py \
   --result_file "$ANSWER_FILE" >> "$RES_FILE"
 
 # Perform per dataset evaluation
-DATASETS=("PanNuke" "NuCLS")
+DATASETS=("liver_cancer_patches" "ICC_subtype_patches" "RCC" "LiWeihan/Lung1000" "LiWeihan/Stomach1000")
 for DATASET in "${DATASETS[@]}"; do
   echo -e "\n—————————————————————————————————— $DATASET Performance ——————————————————————————————————" >> "$RES_FILE"
   python zsxm_val/code/nips_eval/choice_eval.py \

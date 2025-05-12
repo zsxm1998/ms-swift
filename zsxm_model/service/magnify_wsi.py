@@ -11,6 +11,7 @@ from kfb.kfbreader import KFBSlide
 
 # --- 配置 ---
 WSI_MAPPING_FILE = 'wsi_mapping.json' # WSI 映射文件的路径
+CROP_COOR_FILE = 'crop_coordinate.json' # 从WSI局部获取的缩略图的crop坐标文件
 DEFAULT_PATCH_LEVEL = 1 # 默认读取的 WSI 层级，从0开始
 POINT_PATCH_SIZE = (28*18, 504) # 返回的 patch 的最大尺寸 (宽度, 高度)
 NORMALIZATION_RANGE = 1000 # 输入坐标的归一化范围 (0-1000)
@@ -32,20 +33,22 @@ class WSIMapping():
         return key in self.wsi_mapping
             
     def __getitem__(self, key):
-        slide = self.wsi_mapping[key] # 先在锁外快速检查，减少锁竞争
-        if isinstance(slide, str):
+        slide_tuple = self.wsi_mapping[key] # 先在锁外快速检查，减少锁竞争
+        if isinstance(slide_tuple, str):
             # 如果是路径，需要获取锁进行加载检查和更新
             with self._lock:
                 # 在锁内再次检查，防止等待锁时其他线程已加载 (Double-Checked Locking)
-                slide = self.wsi_mapping[key]
-                if isinstance(slide, str):
-                    slide = get_slide(slide)
+                slide_tuple = self.wsi_mapping[key]
+                if isinstance(slide_tuple, str):
+                    slide_object = get_slide(slide_tuple)
                     app.logger.info(f'线程{threading.get_ident()}从缩略图"{key}"加载了WSI: {self.wsi_mapping[key]}')
-                    self.wsi_mapping[key] = slide
-        return slide
+                    self.wsi_mapping[key] = slide_tuple = (slide_tuple, slide_object)
+        return slide_tuple
 
 wsi_mapping = WSIMapping()  # 启动时加载映射表
 
+with open(CROP_COOR_FILE, 'r') as f:
+    crop_coor_map = json.load(f)
 
 # --- WSI 读取辅助函数 ---
 def get_slide(wsi_path):
@@ -142,23 +145,51 @@ def handle_highres_request(arguments, input_images, mode):
 
     # 获取WSI对象
     thumbnail_id = valid_wsi_thumbnails[wsi_index]
-    slide = wsi_mapping[thumbnail_id] # 直接从映射中获取 WSI 对象
+    slide_path, slide = wsi_mapping[thumbnail_id] # 直接从映射中获取 WSI 对象
     
     # 读取Patch
-    base64_images = []
-    for coord in coords_list:
+    base64_images, content = [], ""
+    for i, coord in enumerate(coords_list):
+        # 最多5张图
+        if i >= 4:
+            content = "Too many patches requested, only the first 4 will be returned: "
+            break
         if mode == 'point':
-            cx, cy = convert_normalized_to_level(coord, slide.level_dimensions[DEFAULT_PATCH_LEVEL])
+            if slide_path not in crop_coor_map:
+                cx, cy = convert_normalized_to_level(coord, slide.level_dimensions[DEFAULT_PATCH_LEVEL])
+            else:
+                crop_x1, crop_y1, crop_x2, crop_y2 = crop_coor_map[slide_path]
+                coor_ratio = slide.level_downsamples[DEFAULT_PATCH_LEVEL] / slide.level_downsamples[0]
+                crop_x1, crop_y1, crop_x2, crop_y2 = int(crop_x1/coor_ratio), int(crop_y1/coor_ratio), int(crop_x2/coor_ratio), int(crop_y2/coor_ratio)
+                cx, cy = convert_normalized_to_level(coord, (crop_x2-crop_x1, crop_y2-crop_y1))
+                cx, cy = cx + crop_x1, cy + crop_y1
             x, y = cx - POINT_PATCH_SIZE[0] // 2, cy - POINT_PATCH_SIZE[1] // 2
-            location = (max(0, x), max(0, y)) # 基本边界检查 (避免负坐标)
+            location = (min(max(0, x), slide.level_dimensions[DEFAULT_PATCH_LEVEL][0] - POINT_PATCH_SIZE[0]),
+                        min(max(0, y), slide.level_dimensions[DEFAULT_PATCH_LEVEL][1] - POINT_PATCH_SIZE[1])) # 基本边界检查
             patch_image = read_region(slide, location, DEFAULT_PATCH_LEVEL, POINT_PATCH_SIZE, zero_level_loc=False)
         if mode == 'bbox':
-            x1_0, y1_0, x2_0, y2_0 = convert_normalized_to_level(coord, slide.dimensions)
+            if slide_path not in crop_coor_map:
+                x1_0, y1_0, x2_0, y2_0 = convert_normalized_to_level(coord, slide.dimensions)
+            else:
+                crop_x1, crop_y1, crop_x2, crop_y2 = crop_coor_map[slide_path]
+                x1_0, y1_0, x2_0, y2_0 = convert_normalized_to_level(coord, (crop_x2-crop_x1, crop_y2-crop_y1))
+                x1_0, y1_0, x2_0, y2_0 = x1_0 + crop_x1, y1_0 + crop_y1, x2_0 + crop_x1, y2_0 + crop_y1
             if x2_0 <= x1_0 or y2_0 <= y1_0:
                 return {"status": "error", "content": f"Invalid bounding box coordinates: {coord}"}, 200
             ratio = max((x2_0-x1_0)/POINT_PATCH_SIZE[0], (y2_0-y1_0)/POINT_PATCH_SIZE[1])
             best_level = slide.get_best_level_for_downsample(ratio)
-            x1, y1, x2, y2 = convert_normalized_to_level(coord, slide.level_dimensions[best_level])
+            if slide_path not in crop_coor_map:
+                x1, y1, x2, y2 = convert_normalized_to_level(coord, slide.level_dimensions[best_level])
+            else:
+                crop_x1, crop_y1, crop_x2, crop_y2 = crop_coor_map[slide_path]
+                coor_ratio = slide.level_downsamples[best_level] / slide.level_downsamples[0]
+                crop_x1, crop_y1, crop_x2, crop_y2 = int(crop_x1/coor_ratio), int(crop_y1/coor_ratio), int(crop_x2/coor_ratio), int(crop_y2/coor_ratio)
+                x1, y1, x2, y2 = convert_normalized_to_level(coord, (crop_x2-crop_x1, crop_y2-crop_y1))
+                x1, y1, x2, y2 = x1 + crop_x1, y1 + crop_y1, x2 + crop_x1, y2 + crop_y1
+            x1 = min(max(0, x1), slide.level_dimensions[best_level][0]-2)
+            y1 = min(max(0, y1), slide.level_dimensions[best_level][1]-2)
+            x2 = min(max(0, x2), slide.level_dimensions[best_level][0]-1)
+            y2 = min(max(0, y2), slide.level_dimensions[best_level][1]-1)
             patch_image = read_region(slide, (x1, y1), best_level, (x2-x1, y2-y1), zero_level_loc=False)
             patch_image.thumbnail(POINT_PATCH_SIZE, Image.Resampling.LANCZOS) # 缩放到指定大小
 
@@ -168,10 +199,10 @@ def handle_highres_request(arguments, input_images, mode):
 
     return {
         "status": "success",
-        "content": "\n".join(["<image>"] * len(base64_images)),
+        "content": content + "\n".join(["<image>"] * len(base64_images)),
         "images": base64_images,
         "image_format": "png"
-    }
+    }, 200
 
 
 # --- 注册允许的函数及其处理逻辑 ---
@@ -217,4 +248,4 @@ def handle_api_call():
 
 if __name__ == '__main__':
     # 启动服务器
-    app.run(debug=True, host='0.0.0.0', port=18888, threaded=True)
+    app.run(debug=False, host='0.0.0.0', port=18888, threaded=True)

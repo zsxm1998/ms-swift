@@ -2,16 +2,16 @@
 CUDA_VISIBLE_DEVICES="0,1,2,3,4,5,6,7" \
 NPROC_PER_NODE=8 \
 swift sft \
-    --output_dir ./zsxm_checkpoint/nips/1_sft/qwen2.5-vl-7b_0510_full_VAL_2 \
-    --model Qwen/Qwen2.5-VL-7B-Instruct \
-    --deepspeed zero3 \
+    --output_dir ./zsxm_checkpoint/nips/1_sft/qwen2.5-vl-32b_0415_full_VAL_2 \
+    --model Qwen/Qwen2.5-VL-32B-Instruct \
+    --deepspeed zsxm_model/ds_config/zero2_offload_opt2dsk.json \
     --torch_dtype bfloat16 \
     --train_type full \
     --gradient_checkpointing true \
     --attn_impl flash_attn \
     --freeze_vit false \
     --freeze_aligner false \
-    --dataset ./zsxm_dataset/nips/1_sft/SFT-0510.json \
+    --dataset ./zsxm_dataset/nips/1_sft/SFT-0415.json \
               swift/self-cognition#500 \
     --max_length 8192 \
     --max_pixels $((1280*28*28)) \
@@ -21,7 +21,8 @@ swift sft \
     --gradient_accumulation_steps 16 \
     --learning_rate 2e-5 \
     --eval_strategy no \
-    --save_strategy epoch \
+    --save_strategy steps \
+    --save_steps 500 \
     --save_total_limit 1 \
     --logging_steps 1 \
     --use_hf false \

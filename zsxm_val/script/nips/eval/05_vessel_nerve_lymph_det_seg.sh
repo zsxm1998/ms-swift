@@ -16,7 +16,7 @@ if [ -d "$CKPT_DIR" ]; then
     echo "Error: CKPT_DIR basename must contain the word 'checkpoint'."
     exit 1
   fi
-  CKPT_NAME=$(echo "$CKPT_DIR" | awk -F'/' '{print $(NF-3)"/"$(NF-2)}')
+  CKPT_NAME=$(echo "$CKPT_DIR" | awk -F'/' '{split($(NF-1), v, "-"); split($NF, s, "-"); print $(NF-3)"/"$(NF-2)"|"v[1]"|"s[length(s)]}')
 else
   CKPT_NAME="0_baseline/$(basename "$CKPT_DIR")"
 fi
@@ -25,7 +25,7 @@ fi
 LOG_DIR="zsxm_val/results/nips/$CKPT_NAME"
 mkdir -p "$LOG_DIR"
 
-TASK_NAME="06_vessel_nerve_lymph_det_seg"
+TASK_NAME="05_vessel_nerve_lymph_det_seg"
 RES_FILE="$LOG_DIR/$TASK_NAME.log"
 QUESTION_FILE="zsxm_dataset/nips/9_test/$TASK_NAME.json"
 ANSWER_FILE="$LOG_DIR/z$TASK_NAME.jsonl"

@@ -101,7 +101,10 @@ def evaluate_multi_class_detection(data_list, iou_threshold=0.5):
             iou_pairs = []
             for i, gt in enumerate(gt_boxes):
                 for j, pred in enumerate(pred_boxes):
-                    iou = compute_iou(gt, pred)
+                    try:
+                        iou = compute_iou(gt, pred)
+                    except:
+                        iou = 0.0
                     if iou >= iou_threshold:
                         iou_pairs.append( (iou, i, j) )
             

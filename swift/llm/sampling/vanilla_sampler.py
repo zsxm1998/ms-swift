@@ -123,6 +123,9 @@ class VanillaSampler(Sampler):
         _cur = 0
         for idx, row in enumerate(rows):
             row = deepcopy(row)
+            # ADD BY ZSXM for compatible for GRPO data
+            if row['messages'][-1]['role'] != 'assistant':
+                row['messages'].append({'role': 'assistant', 'content': row['solution']})
             uuid = get_messages_md5(row)
             if uuid in self.caches:
                 choices = self.caches[uuid]['choices']

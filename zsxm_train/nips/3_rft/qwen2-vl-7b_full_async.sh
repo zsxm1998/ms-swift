@@ -42,7 +42,7 @@ swift rlhf \
     --gradient_accumulation_steps 8 \
     --eval_steps 125 \
     --save_steps 125 \
-    --save_total_limit 2 \
+    --save_total_limit 1 \
     --logging_steps 1 \
     --warmup_ratio 0.05 \
     --dataloader_num_workers 4 \

@@ -641,11 +641,12 @@ class GRPOTrainer(RLHFTrainerMixin, SwiftMixin, HFGRPOTrainer):
                 inputs_slice = [r for r in results if not r['finished']]
                 for idx, r in enumerate(results):
                     if r['finished'] or r['finish_reason'] == 'length':
-                        messages_list[r['index']] = (r['messages'], r['finish_reason'])
+                        messages_list[r['index']] = (r['messages'], r['finish_reason'],
+                                                     {k: r[k] for k in ['images','audios','videos'] if k in r}) # modified by zsxm
                 if len(inputs_slice) > 0:
                     _input_std = []
                     for _input in inputs_slice:
-                        _input_std.append(StdTemplateInputs.from_dict(_input))
+                        _input_std.append(InferRequest.from_dict(_input)) # replace StdTemplateInputs to InferRequest by ZSXM
                         # StdTemplateInputs will not remove responses in infer
                     results = self._engine_infer(
                         infer_requests=_input_std, request_config=request_config, use_tqdm=False)
@@ -669,7 +670,8 @@ class GRPOTrainer(RLHFTrainerMixin, SwiftMixin, HFGRPOTrainer):
                     _input: Dict = deepcopy(inputs_slice[i])
                     InferRequest.remove_response(_input['messages'])
                     _input['messages'].append({'role': 'assistant', 'content': choice.message.content})
-                    _choices.append((_input['messages'], choice.finish_reason))
+                    _choices.append((_input['messages'], choice.finish_reason,
+                                     {k: _input[k] for k in ['images','audios','videos'] if k in _input})) # modified by zsxm
                 outputs.append(_choices)
             assert len(outputs) == prompt_lens
             assert all([len(o) == self.args.tensor_parallel_size for o in outputs])
@@ -819,6 +821,10 @@ class GRPOTrainer(RLHFTrainerMixin, SwiftMixin, HFGRPOTrainer):
         for i, output in enumerate(outputs):
             inputs[i]['messages'] = output[0][0]
             inputs[i]['is_truncated'] = output[0][1] == 'length'
+            # added by ZSXM for tool provided images
+            for k in ['images','audios','videos']:
+                if k in output[0][2] and output[0][2][k]:
+                    inputs[i][k] = output[0][2][k]
 
         return inputs
 

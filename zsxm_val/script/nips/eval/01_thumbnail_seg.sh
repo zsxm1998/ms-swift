@@ -16,7 +16,7 @@ if [ -d "$CKPT_DIR" ]; then
     echo "Error: CKPT_DIR basename must contain the word 'checkpoint'."
     exit 1
   fi
-  CKPT_NAME=$(echo "$CKPT_DIR" | awk -F'/' '{print $(NF-3)"/"$(NF-2)}')
+  CKPT_NAME=$(echo "$CKPT_DIR" | awk -F'/' '{split($(NF-1), v, "-"); split($NF, s, "-"); print $(NF-3)"/"$(NF-2)"|"v[1]"|"s[length(s)]}')
 else
   CKPT_NAME="0_baseline/$(basename "$CKPT_DIR")"
 fi

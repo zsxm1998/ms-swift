@@ -42,11 +42,12 @@ def check_math_result_and_give_tips_multi_turn(inputs):
     return inputs
 
 
-def magnify_wsi(inputs: List[Dict], target_url=''):
+def magnify_wsi(inputs: List[Dict], target_url='http://127.0.0.1:18888/magnifywsi'):
+    #print(f"ZSXM magnify_wsi| {[[i for i in x['images'] if isinstance(i, dict)] for x in inputs]}")
     for input in inputs:
         last_output = input['messages'][-1]['content']
         match = re.search(r'<function name="([a-zA-Z0-9_]+)">\s*(.*?)\s*</function>$', last_output, re.DOTALL)
-        if match:
+        if match and not any(m['role'] == 'tool' for m in input['messages']):
             # # 删除之前对话的思考过程
             # for mess in input['messages']:
             #     if mess['role'] == 'assistant':
@@ -76,18 +77,22 @@ def magnify_wsi(inputs: List[Dict], target_url=''):
                 raise
 
             response_status = response_data.get('status')
+            response_content = response_data.get('content')
             if response_status == 'success':
                 image_format = response_data.get('image_format', 'png') # Default to png if format missing
                 images_base64 = response_data.get('images')
+                assert len(images_base64) == response_content.count('<image>'), f"Image count mismatch: {len(images_base64)=} != {response_content.count('<image>')=}"
 
                 for img_base64 in images_base64:
                     image = f'data:image/{image_format};base64,{img_base64}'
-                    input['images'].append(image)
+                    input['images'].append({'bytes': None, 'path': image})
 
-            input['messages'].append({'role': 'tool', 'content': response_data.get('content')})
+            input['messages'].append({'role': 'tool', 'content': response_content})
             input['finished'] = False
         else:
             input['finished'] = True
+    #print(f"ZSXM magnify_wsi image_num: {[len(x['images']) for x in inputs]}\nroles: {[[m['role'] for m in x['messages']] for x in inputs]}\ninputs: {[x['messages'][1:] for x in inputs]}")
+    return inputs
 
 
 multi_turns = {
