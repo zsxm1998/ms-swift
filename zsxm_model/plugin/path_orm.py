@@ -6,6 +6,7 @@ import xml.etree.ElementTree as ET
 from typing import List
 from shapely.geometry import Polygon
 from shapely.ops import unary_union
+import traceback
 
 
 from swift.plugin import ORM, orms
@@ -690,7 +691,7 @@ class PathORM_Organ(PathORM):
 
                         # 如果回答正确，且器官判断错误，则惩罚0.5
                         if is_correct:
-                            gt_organ, img_root = 'unknown', osp.dirname(imgs[0])
+                            gt_organ, img_root = 'unknown', osp.dirname(imgs[0]['path'])
                             for img_keyword, organ in image_organ_map.items():
                                 if img_keyword in img_root:
                                     gt_organ = organ
