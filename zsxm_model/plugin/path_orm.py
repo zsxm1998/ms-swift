@@ -1,6 +1,7 @@
 import re
 import ast
 import math
+import os.path as osp
 import xml.etree.ElementTree as ET
 from typing import List
 from shapely.geometry import Polygon
@@ -410,6 +411,74 @@ def seg_reward(gt_res, content_res, beta=0.5):
     return reward
 
 
+image_organ_map = {'HCC_grading': 'liver', 'ICC_subtype': 'liver', 'liver_cancer': 'liver', 'liverWSI': 'liver',
+                   'Lung1000': 'lung', 'Stomach1000': 'stomach', 'RCC': 'kidney', 'XiaJiabinWeiAi': 'stomach',}
+
+
+def infer_organ_from_text(text: str) -> str:
+    organ_keywords = {
+        "liver": {
+            "en": [
+                "liver", "hepatic", "hepatocellular", "hcc", "hepatic lesion",
+                "cholangiocarcinoma", "intrahepatic", "icc", "chcc-cca",
+                "macrotrabecular", "pseudoglandular", "scirrhous",
+                "large bile duct", "small bile duct", "combined hepatocellular-cholangiocarcinoma"
+            ],
+            "zh": [
+                "肝", "粗梁型", "粗梁团块型", "假腺管型", "硬化型", "小胆管型", "大胆管型", "混合型肝癌"
+            ]
+        },
+        "lung": {
+            "en": [
+                "lung", "pulmonary", "nsclc", "sclc", "bronchial", "adenocarcinoma of the lung",
+                "keratinizing squamous", "non-keratinizing squamous", "basaloid carcinoma of lung"
+            ],
+            "zh": [
+                "肺", "肺腺癌", "非小细胞", "小细胞", "鳞癌", "角化型", "非角化型", "基底样肺癌"
+            ]
+        },
+        "stomach": {
+            "en": [
+                "stomach", "gastric", "gastroesophageal", "gastric cancer", "lauren classification",
+                "intestinal type", "diffuse type", "mixed type"
+            ],
+            "zh": [
+                "胃", "胃腺癌", "弥漫型", "肠型", "混合型", "lauren分型"
+            ]
+        },
+        "kidney": {
+            "en": [
+                "kidney", "renal", "renal cell", "rcc",
+                "clear cell", "ccrcc", "papillary renal cell", "prcc", "chromophobe", "chrcc", "collecting duct carcinoma"
+            ],
+            "zh": [
+                "肾", "透明细胞癌", "乳头状肾癌", "嫌色细胞癌", "集合管癌"
+            ]
+        }
+    }
+
+    text = text.lower()
+    matched_organs = []
+
+    for organ, kw_dict in organ_keywords.items():
+        for keyword in kw_dict["en"]:
+            if re.search(r'\b' + re.escape(keyword) + r'\b', text):
+                matched_organs.append(organ)
+                break
+        else:
+            for keyword in kw_dict["zh"]:
+                if keyword in text:
+                    matched_organs.append(organ)
+                    break
+
+    if len(matched_organs) == 0:
+        return "unknown"
+    elif len(matched_organs) == 1:
+        return matched_organs[0]
+    else:
+        return "unsure"
+
+
 class PathORM(ORM):
     def __init__(self,
                  tokenizer=None,
@@ -534,6 +603,115 @@ class PathORM(ORM):
             rewards.append(format_reward + acc_reward)
         
         return rewards
+    
+
+class PathORM_Organ(PathORM):
+    """在PathORM的基础上，对选择任务，如果能确定数据的器官来源，则回答正确时检测思考过程中对图片器官的判断，若错误则acc reward减去0.5"""
+
+    def __call__(self, completions, solution, task, messages, images, **kwargs) -> List[float]:
+        rewards = []
+        for content, gt, task_type, msgs, imgs in zip(completions, solution, task, messages, images):
+            stag, etag = self.task_setags.get(task_type, (None, None))
+            format_reward, acc_reward = 0., 0.
+
+            # 计算各个类别的format_reward
+            if task_type in ['choice']:
+                if think_format_with_suffix(content):
+                    format_reward = 0.8
+                    if think_format_no_suffix(content):
+                        format_reward = 1.0
+                else:
+                    if content.count('<think>') == 1 and content.count('</think>') == 1 \
+                        and content.index('<think>') < content.index('</think>'):
+                        format_reward += 0.3
+                    if content.count('<answer>') == 1 and content.count('</answer>') == 1 \
+                        and content.index('<answer>') < content.index('</answer>'):
+                        format_reward += 0.4
+            elif task_type in ['seg', 'det_no_class', 'det_with_class']:
+                format_reward = 0.1
+                if content.count(stag) == 1 and content.count(etag) == 1 \
+                    and content.index(stag) < content.index(etag):
+                    format_reward = 1.0
+                elif check_negative_exist(content):
+                    format_reward = 1.0
+                elif check_other_task_tag_exist(content, self.stag_set, stag):
+                    format_reward = 0.0
+            else:
+                raise ValueError(f'task "{task_type}" not supported')
+            
+            # 计算各个类别的acc_reward
+            try:
+                if format_reward > 0.5: # 只有格式符合基本要求才计算acc_reward
+                    if task_type in ['choice']:
+                        # 提取gt和content中的选项标签
+                        gt_choice = extract_choice_label(gt) # 选项序号或False
+                        content_answer = extract_between_tags(content, '<answer>', '</answer>')
+                        content_choice = extract_choice_label(content_answer) # 选项序号或False
+
+                        # 若标签符合则赋予1.0的离散reward
+                        is_correct = False
+                        if gt_choice and content_choice and gt_choice == content_choice:
+                            acc_reward = 1.0
+                            is_correct = True
+                        elif not gt_choice and check_negative_exist(gt) \
+                            and not content_choice and check_negative_exist(content_answer):
+                            acc_reward = 1.0
+                            is_correct = True
+                        
+                        # 若tokenzier存在则计算长度reward
+                        if self.tokenizer is not None:
+                            if is_correct:
+                                # Swap min/max for correct answers
+                                max_len_value = self.max_len_value_correct
+                                min_len_value = self.min_len_value_correct
+                            else:
+                                max_len_value = self.max_len_value_wrong
+                                min_len_value = self.min_len_value_wrong
+                            gen_len = len(self.tokenizer.encode(extract_between_tags(content, '<think>', '</think>')))
+                            acc_reward = self.cosfn(gen_len, self.max_len, max_len_value, min_len_value)
+                        
+                        # 考虑思考语言对reward的影响
+                        user_last_query = [m['content'] for m in msgs if m['role'] == 'user'][-1]
+                        language_inconsistency = has_chinese(user_last_query) \
+                            != has_chinese(extract_between_tags(content, '<think>', '</think>'))
+                        
+                        # 如果存在语言不一致
+                        if language_inconsistency:
+                            if is_correct:
+                                if self.tokenizer is not None:
+                                    acc_reward = min(self.min_len_value_correct, self.max_len_value_correct) - 0.1
+                                else:
+                                    acc_reward = 0.9
+                            else:
+                                if self.tokenizer is not None:
+                                    acc_reward = min(self.min_len_value_wrong, self.max_len_value_wrong) - 0.1
+                                else:
+                                    acc_reward = -0.1
+
+                        # 如果回答正确，且器官判断错误，则惩罚0.5
+                        if is_correct:
+                            gt_organ, img_root = 'unknown', osp.dirname(imgs[0])
+                            for img_keyword, organ in image_organ_map.items():
+                                if img_keyword in img_root:
+                                    gt_organ = organ
+                                    break
+                            think_organ = infer_organ_from_text(extract_between_tags(content, '<think>', '</think>'))
+                            if think_organ=='unsure' or (gt_organ!=think_organ and 'unknown' not in [gt_organ, think_organ]):
+                                acc_reward -= 0.5
+
+                    elif task_type in ['seg', 'det_no_class', 'det_with_class']:
+                        reward_func = globals().get(f"{task_type}_reward")
+                        acc_reward = reward_func(
+                            extract_between_tags(gt, stag, etag, include_tags=True, return_origin=True),
+                            extract_between_tags(content, stag, etag, include_tags=True, return_origin=True)
+                        )
+            except:
+                acc_reward = 0.0
+
+            rewards.append(format_reward + acc_reward)
+        
+        return rewards
 
 
 orms['pathorm'] = PathORM
+orms['pathorm_organ'] = PathORM_Organ
