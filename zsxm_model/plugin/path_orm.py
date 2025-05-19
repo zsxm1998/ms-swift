@@ -6,7 +6,6 @@ import xml.etree.ElementTree as ET
 from typing import List
 from shapely.geometry import Polygon
 from shapely.ops import unary_union
-import traceback
 
 
 from swift.plugin import ORM, orms
