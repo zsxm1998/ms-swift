@@ -67,6 +67,12 @@ def get_dataset(args):
                 image = image[0]
             if args.dataset and not fnmatch.fnmatch(image, args.dataset):
                 continue
+        else:
+            image = resdata.get('images', resdata.get('image'))
+            if isinstance(image, (list, tuple)):
+                image = image[0]
+            if image is not None and args.dataset and not fnmatch.fnmatch(image, args.dataset):
+                continue
         question = resdata['prompt'].replace('<image>','').strip()
         dataset.append((question, resdata['gt_answer'], resdata['model_response']))
     return dataset

@@ -124,6 +124,7 @@ def main(args):
                 response = resp.choices[0].message.content
                 ans_file.write(json.dumps({
                     "question_id": data['question_id'],
+                    "images": data['images'],
                     "prompt": data['messages'][-1]['content'],
                     "model_response": response,
                     "gt_answer": data.get('answer', None),
@@ -135,6 +136,7 @@ def main(args):
             response = engine.infer(infer_requests, **infer_kwargs)[0].choices[0].message.content
             ans_file.write(json.dumps({
                 "question_id": data['question_id'],
+                "images": data['images'],
                 "prompt": data['messages'][-1]['content'],
                 "model_response": response,
                 "gt_answer": data.get('answer', None),

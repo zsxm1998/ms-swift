@@ -92,7 +92,13 @@ def get_dataset(args, parse_func=parse_bbox_string, stag='<bbox_list>', etag='</
             if args.dataset and not fnmatch.fnmatch(image, args.dataset):
                 continue
         else:
-            image = None
+            image = resdata.get('images', resdata.get('image'))
+            if isinstance(image, (list, tuple)):
+                image = image[0]
+            if image is not None and args.img_dir and not osp.exists(image) and not osp.isabs(image):
+                image = osp.join(args.img_dir, image)
+            if image is not None and args.dataset and not fnmatch.fnmatch(image, args.dataset):
+                continue
         gt_answer = extract_between_tags(resdata['gt_answer'], stag, etag, include_tags=True, return_origin=True)
         model_response = extract_between_tags(resdata['model_response'], stag, etag, include_tags=True, return_origin=True)
         if check_negative_exist(gt_answer):
