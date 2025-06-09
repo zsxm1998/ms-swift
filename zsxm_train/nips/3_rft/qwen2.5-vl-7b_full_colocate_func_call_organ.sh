@@ -9,11 +9,11 @@ MAX_PIXELS=$((1280*28*28)) \
 swift rlhf \
     --rlhf_type grpo \
     --model ./zsxm_checkpoint/nips/2_sft_last_round/qwen2.5-vl-7b_0510_full_VAL_2_v0#sft#full_L_2/v0-20250513-015709/checkpoint-8 \
-    --output_dir ./zsxm_checkpoint/nips/3_rft/qwen2.5-vl-7b_0510_full_VAL_2_v0#last_round_sft#ToolCall_organ-reward_full_bs128_temp0.9 \
+    --output_dir ./zsxm_checkpoint/nips/3_rft/qwen2.5-vl-7b_0510_full_VAL_2_v0#last_round_sft#ToolCall_organ-reward-all-content-consist-no-wrong-cosine_full_bs128_temp0.9 \
     --external_plugins ./zsxm_model/plugin/path_orm.py \
     --reward_funcs pathorm_organ \
     --cosine_min_len_value_wrong 0.0 \
-    --cosine_max_len_value_wrong 0.1 \
+    --cosine_max_len_value_wrong 0.0 \
     --cosine_min_len_value_correct 1.0 \
     --cosine_max_len_value_correct 1.0 \
     --use_vllm true \

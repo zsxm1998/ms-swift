@@ -2,7 +2,7 @@
 
 # Check if the correct number of arguments is provided
 if [ "$#" -lt 1 ]; then
-  echo "Usage: $0 <CKPT_DIR> [-ng] [--think] [-tp <int>] [--batch-size <int>]"
+  echo "Usage: $0 <CKPT_DIR> [-ng] [--think] [--func] [-tp <int>] [--batch-size <int>]"
   exit 1
 fi
 
@@ -46,6 +46,10 @@ while [[ $# -gt 0 ]]; do
       THINK_FLAG=true
       shift
       ;;
+    --func)
+      FUNC_FLAG=true
+      shift
+      ;;
     -tp)
       TP_VALUE="$2"
       shift 2
@@ -60,9 +64,12 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Add think for ANSWER_FILE
+# Add think and func for ANSWER_FILE
 if [ -n "$THINK_FLAG" ]; then
   ANSWER_FILE="${ANSWER_FILE%.jsonl}_think.jsonl"
+fi
+if [ -n "$FUNC_FLAG" ]; then
+  ANSWER_FILE="${ANSWER_FILE%.jsonl}_func.jsonl"
 fi
 
 # Build Python arguments
@@ -76,6 +83,10 @@ PYTHON_ARGS=(
 if [ -n "$THINK_FLAG" ]; then
   PYTHON_ARGS+=(--think)
   RES_FILE="${RES_FILE%.log}_think.log"
+fi
+if [ -n "$FUNC_FLAG" ]; then
+  PYTHON_ARGS+=(--func)
+  RES_FILE="${RES_FILE%.log}_func.log"
 fi
 if [ -n "$TP_VALUE" ]; then
   PYTHON_ARGS+=(-tp "$TP_VALUE")

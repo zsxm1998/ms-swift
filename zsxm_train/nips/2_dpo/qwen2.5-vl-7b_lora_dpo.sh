@@ -15,6 +15,7 @@ swift rlhf \
     --dataset ./zsxm_dataset/nips/2_dpo/liver_thumbnail.json \
               ./zsxm_dataset/nips/2_dpo/function_liver_thumbnail.json \
               ./zsxm_dataset/nips/2_dpo/liver_patch.json \
+              ./zsxm_dataset/nips/2_dpo/rft_seg_det_cold_start.json \
     --max_length 8192 \
     --max_pixels $((1280*28*28)) \
     --truncation_strategy right \

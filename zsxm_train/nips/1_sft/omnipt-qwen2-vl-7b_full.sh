@@ -2,15 +2,17 @@
 CUDA_VISIBLE_DEVICES="0,1,2,3,4,5,6,7" \
 NPROC_PER_NODE=8 \
 swift sft \
-    --output_dir ./zsxm_checkpoint/nips/1_sft/qwen2-vl-7b-base_0510_full_VAL_2 \
-    --model Qwen/Qwen2-VL-7B \
-    --deepspeed zero3 \
+    --output_dir ./zsxm_checkpoint/nips/1_sft/omnipt-qwen2-vl-7b_0510_full_VAL_2 \
+    --model zsxm_checkpoint/nips/0_pretrain/omnipt-qwen2-vl-7b_0608_full_A2_1/v0-20250609-003645/checkpoint-2533 \
+    --custom_register_path ./zsxm_model/models/omnipt_qwen2_vl/swift_register.py \
+    --deepspeed zero2 \
     --torch_dtype bfloat16 \
     --train_type full \
     --gradient_checkpointing true \
     --attn_impl flash_attn \
-    --freeze_vit false \
+    --freeze_vit true \
     --freeze_aligner false \
+    --trainable_parameters visual \
     --dataset ./zsxm_dataset/nips/1_sft/SFT-0510.json \
               swift/self-cognition#500 \
     --max_length 8192 \
