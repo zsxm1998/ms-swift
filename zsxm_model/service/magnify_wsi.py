@@ -77,11 +77,18 @@ def read_region(slide, location, level, size, zero_level_loc=False) -> Image.Ima
 
 # --- 图像编码和坐标转换 ---
 def encode_image_to_base64(image: Image.Image, format: str = "png") -> str:
-    """将 PIL Image 对象编码为 Base64 字符串"""
+    """将 PIL Image 对象编码为 Base64 字符串，并清除 ICC/iCCP 元信息"""
     buffer = io.BytesIO()
-    image.save(buffer, format=format.upper()) # PIL 需要大写格式
-    image_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
-    return image_base64
+    
+    # 创建一个不带 profile 的干净图像
+    clean_img = Image.new("RGB", image.size)
+    clean_img.paste(image)
+
+    # 保存成无 metadata 的图像
+    clean_img.save(buffer, format=format.upper())
+
+    return base64.b64encode(buffer.getvalue()).decode('utf-8')
+
 
 def convert_normalized_to_level(coord, level_dimension):
     """
