@@ -577,7 +577,7 @@ class PathORM(ORM):
                         #     language_inconsistency = has_chinese(extract_between_tags(content, '<think>', '</think>'))
                         user_last_query = [m['content'] for m in msgs if m['role'] == 'user'][-1]
                         language_inconsistency = has_chinese(user_last_query) \
-                            != has_chinese(extract_between_tags(content, '<think>', '</think>'))
+                            != has_chinese(content) #has_chinese(extract_between_tags(content, '<think>', '</think>'))
                         
                         # 如果存在语言不一致
                         if language_inconsistency:
@@ -673,7 +673,7 @@ class PathORM_Organ(PathORM):
                         # 考虑思考语言对reward的影响
                         user_last_query = [m['content'] for m in msgs if m['role'] == 'user'][-1]
                         language_inconsistency = has_chinese(user_last_query) \
-                            != has_chinese(extract_between_tags(content, '<think>', '</think>'))
+                            != has_chinese(content) #has_chinese(extract_between_tags(content, '<think>', '</think>'))
                         
                         # 如果存在语言不一致
                         if language_inconsistency:

@@ -23,7 +23,8 @@ swift sft \
     --gradient_accumulation_steps 16 \
     --learning_rate 2e-5 \
     --eval_strategy no \
-    --save_strategy epoch \
+    --save_strategy steps \
+    --save_steps 500 \
     --save_total_limit 1 \
     --logging_steps 1 \
     --use_hf false \
