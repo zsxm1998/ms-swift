@@ -55,7 +55,11 @@ class OmniPTQwen2VLTemplate(Qwen2VLTemplate):
 
         return {'inputs_embeds': inputs_embeds}
 
-register_template(QwenTemplateMeta('omnipt_qwen2_vl', template_cls=OmniPTQwen2VLTemplate))
+register_template(QwenTemplateMeta(
+    'omnipt_qwen2_vl',
+    template_cls=OmniPTQwen2VLTemplate,
+    default_system="你是由浙江大学VIPA实验室开发的OmniPT多模态智能助手，用于辅助病理医生进行专业、准确、高效的诊断。你能够根据用户输入的图片和文字指令或问题，给出相应的回答。"
+))
 
 
 register_model_arch(

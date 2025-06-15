@@ -7,9 +7,13 @@ from typing import List, Dict
 from dataclasses import asdict
 from copy import deepcopy
 
-from swift.llm import InferClient, VllmEngine, InferRequest, RequestConfig, AdapterRequest
+from swift.llm import InferClient, VllmEngine, PtEngine, InferRequest, RequestConfig, AdapterRequest
 from swift.llm.infer.protocol import ChatCompletionResponse
 from swift.plugin.multi_turn import magnify_wsi
+from swift.utils import import_external_file
+
+
+import_external_file('zsxm_model/models/omnipt_qwen2_vl/swift_register.py')
 
 
 def load_json(path):
@@ -84,16 +88,25 @@ def main(args):
 
     # 根据条件创建推理后端或确定vllm后端
     if args.model_path: # 使用模型创建vllm推理后端
-        engine = VllmEngine(
-            model_id_or_path=args.model_path,
-            gpu_memory_utilization=0.8,
-            tensor_parallel_size=args.tensor_parallel_size,
-            enable_lora=args.lora_path is not None,
-            max_lora_rank=16,
-            use_async_engine=False,
-            max_num_seqs=args.batch_size if args.batch_size > 1 else inspect.signature(VllmEngine.__init__).parameters['max_num_seqs'].default,
-            limit_mm_per_prompt={"image": 7, "video": 1},
-        )
+        try:
+            engine = VllmEngine(
+                model_id_or_path=args.model_path,
+                gpu_memory_utilization=0.8,
+                tensor_parallel_size=args.tensor_parallel_size,
+                enable_lora=args.lora_path is not None,
+                max_lora_rank=16,
+                use_async_engine=False,
+                max_num_seqs=args.batch_size if args.batch_size > 1 else inspect.signature(VllmEngine.__init__).parameters['max_num_seqs'].default,
+                limit_mm_per_prompt={"image": 7, "video": 1},
+            )
+        except:
+            engine = PtEngine(
+                model_id_or_path=args.model_path,
+                max_batch_size=args.batch_size,
+                attn_impl='flash_attn',
+                use_hf=True,
+            )
+            print("Fallback to PtEngine due to VllmEngine initialization failure.")
     else: # 使用现成的vllm后端
         engine = InferClient(host=args.vllm_host, port=args.vllm_port, timeout=3600)
         vllm_models = engine.models
@@ -173,19 +186,54 @@ def main(args):
                     }, ensure_ascii=False) + "\n")
                     ans_file.flush()
     else:
-        if args.func:
-            raise NotImplementedError("Function calling mode is not supported for batch size 1.")
+        # if args.func:
+        #     raise NotImplementedError("Function calling mode is not supported for batch size 1.")
         for data in tqdm(dataset):
             infer_requests = [InferRequest(messages=data['messages'], images=data['images'])]
-            response = engine.infer(infer_requests, **infer_kwargs)[0].choices[0].message.content
-            ans_file.write(json.dumps({
-                "question_id": data['question_id'],
-                "images": data['images'],
-                "prompt": data['messages'][-1]['content'],
-                "model_response": response,
-                "gt_answer": data.get('answer', None),
-            }, ensure_ascii=False) + "\n")
-            ans_file.flush()
+            response: ChatCompletionResponse = engine.infer(infer_requests, **infer_kwargs)[0]
+            if args.func:
+                remove_response = True
+                while True:
+                    choice = response.choices[0]
+                    _input: Dict = asdict(infer_requests[0]) if isinstance(infer_requests[0], InferRequest) else deepcopy(infer_requests[0])
+                    if remove_response or _input['messages'][-1]['role'] != 'assistant' or not \
+                            _input['messages'][-1]['content']:
+                        InferRequest.remove_response(_input['messages'])
+                        _input['messages'].append({'role': 'assistant', 'content': choice.message.content})
+                    else:
+                        _input['messages'][-1]['content'] += choice.message.content
+                    _input['finish_reason'] = choice.finish_reason
+                    inputs = [_input]
+                    inputs: List[Dict] = magnify_wsi(inputs)
+                    if inputs[0]['finished'] or inputs[0]['finish_reason'] == 'length':
+                        mess = inputs[0]['messages']
+                        if mess[0]['role'] == 'system':
+                            mess.pop(0)
+                        response = mess[-1]['content']
+                        ans_file.write(json.dumps({
+                            "question_id": data['question_id'],
+                            "images": data['images'],
+                            "prompt": data['messages'][-1]['content'],
+                            "model_response": response,
+                            "gt_answer": data.get('answer', None),
+                            "messages": mess,
+                            "finish_reason": finish_reason,
+                        }, ensure_ascii=False) + "\n")
+                        ans_file.flush()
+                        break
+                    else:
+                        response = engine.infer([InferRequest.from_dict(inputs[0])], **infer_kwargs)[0]
+                        remove_response = False
+            else:
+                response = response.choices[0].message.content
+                ans_file.write(json.dumps({
+                    "question_id": data['question_id'],
+                    "images": data['images'],
+                    "prompt": data['messages'][-1]['content'],
+                    "model_response": response,
+                    "gt_answer": data.get('answer', None),
+                }, ensure_ascii=False) + "\n")
+                ans_file.flush()
     ans_file.close()
 
 
