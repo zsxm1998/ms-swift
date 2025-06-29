@@ -20,10 +20,6 @@ question_lists = {
         ("What is the pathological type? A. {}, B. {}", ['A', 'B']),
         ("Diagnose the disease from this image. A. {}, B. {}, C. {}", ['A', 'B', 'C']),
     ],
-    'cancer_grading': [
-        ("What is the cancer grade? A. {}, B. {}, C. {}, D. {}, E. {}", ['A', 'B', 'C', 'D', 'E']),
-        ("What is the cancer grade? A. {}, B. {}, C. {}", ['A', 'B', 'C']),
-    ],
     'subtype_cancer': [
         ("Identify the cancer subtype. A. {}, B. {}, C. {}, D. {}", ['A', 'B', 'C', 'D']),
         ("Identify the cancer subtype. A. {}, B. {}, C. {}", ['A', 'B', 'C']),
@@ -33,6 +29,10 @@ question_lists = {
     'LAUREN_type': [
         ("Identify the lauren classification from the options: A. {}, B. {}, C. {}", ['A', 'B', 'C']),
         ("Identify the lauren classification from the options: A. {}, B. {}", ['A', 'B']),
+    ],
+    'cancer_grading': [
+        ("What is the cancer grade? A. {}, B. {}, C. {}, D. {}, E. {}", ['A', 'B', 'C', 'D', 'E']),
+        ("What is the cancer grade? A. {}, B. {}, C. {}", ['A', 'B', 'C']),
     ],
 }
 

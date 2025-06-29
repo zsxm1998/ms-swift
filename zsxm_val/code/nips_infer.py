@@ -68,18 +68,21 @@ def preprocess_data(args):
                         data['images'][i] = osp.join(image_folder, image)
                     else:
                         raise ValueError(f'Image "{image}" not found.')
-            user_text = '\n'.join([x['content'] for x in data['messages'] if x['role'] in ['user', 'human']])
+            user_text = '\n'.join([x['content'] for x in data['messages'] if x['role'] in ['user', 'human', 'tool']])
             user_image_count = user_text.count('<image>')
             if user_image_count < len(data['images']):
                 data['messages'][-1]['content'] = ''.join(['<image>\n']*(len(data['images'])-user_image_count)) + data['messages'][-1]['content']
-        if data['messages'][0]['role'] not in ['system', 'system_prompt']:
+        if data['messages'][0]['role'] not in ['system', 'system_prompt'] or args.ignore_origin_system:
             system_str = args.system or ''
             if args.think:
                 system_str = system_str + '\n\n' + args.think_system if system_str else args.think_system
             if args.func:
                 system_str = system_str + '\n\n' + args.func_system if system_str else args.func_system
             if system_str:
-                data['messages'].insert(0, {'role': 'system', 'content': system_str})
+                if data['messages'][0]['role'] not in ['system', 'system_prompt']:
+                    data['messages'].insert(0, {'role': 'system', 'content': system_str})
+                else:
+                    data['messages'][0]['content'] = system_str
     return questions
 
 def main(args):
@@ -97,9 +100,12 @@ def main(args):
                 max_lora_rank=16,
                 use_async_engine=False,
                 max_num_seqs=args.batch_size if args.batch_size > 1 else inspect.signature(VllmEngine.__init__).parameters['max_num_seqs'].default,
-                limit_mm_per_prompt={"image": 7, "video": 1},
+                limit_mm_per_prompt={"image": 10, "video": 1},
+                engine_kwargs={'seed': args.seed} if args.seed is not None else None,
             )
-        except:
+        except Exception as e:
+            print(f"Failed to initialize VllmEngine: {e}")
+            args.batch_size = 2 if args.func else args.batch_size // 2
             engine = PtEngine(
                 model_id_or_path=args.model_path,
                 max_batch_size=args.batch_size,
@@ -119,7 +125,14 @@ def main(args):
             engine.mllm_max_batch_size = args.batch_size
 
     # 准备推理
-    infer_kwargs = {'request_config': RequestConfig(max_tokens=args.max_tokens, temperature=args.temperature)}
+    infer_kwargs = {'request_config': RequestConfig(
+        max_tokens = args.max_tokens,
+        temperature = args.temperature,
+        top_k = (-1 if isinstance(engine, (VllmEngine, InferClient)) else 50) if args.seed is not None else None,
+        top_p = 1 if args.seed is not None else None,
+        repetition_penalty = 1 if args.seed is not None else None,
+        seed = args.seed
+    )} # 这里对top_k/top_p/repetition_penalty这样处理是为了在不设置seed的情况下和原来代码保持表现相同
     infer_kwargs['use_tqdm'] = False #True if args.batch_size > 1 else False
     if args.lora_path:
         infer_kwargs['adapter_request'] = AdapterRequest('lora1', args.lora_path)
@@ -164,10 +177,11 @@ def main(args):
                     if mess[0]['role'] == 'system':
                         mess.pop(0)  # Remove system message if exists
                     response = mess[-1]['content']
+                    prompt_idx_list = [j for j, m in enumerate(data['messages']) if m['role'] == 'user']
                     ans_file.write(json.dumps({
                         "question_id": data['question_id'],
                         "images": data['images'],
-                        "prompt": data['messages'][-1]['content'],
+                        "prompt": data['messages'][prompt_idx_list[-1 if args.prompt_last else 0]]['content'],
                         "model_response": response,
                         "gt_answer": data.get('answer', None),
                         "messages": mess,
@@ -177,10 +191,11 @@ def main(args):
             else:
                 for resp, data in zip(resp_list, dataset[i:i + args.batch_size]):
                     response = resp.choices[0].message.content
+                    prompt_idx_list = [j for j, m in enumerate(data['messages']) if m['role'] == 'user']
                     ans_file.write(json.dumps({
                         "question_id": data['question_id'],
                         "images": data['images'],
-                        "prompt": data['messages'][-1]['content'],
+                        "prompt": data['messages'][prompt_idx_list[-1 if args.prompt_last else 0]]['content'],
                         "model_response": response,
                         "gt_answer": data.get('answer', None),
                     }, ensure_ascii=False) + "\n")
@@ -210,10 +225,11 @@ def main(args):
                         if mess[0]['role'] == 'system':
                             mess.pop(0)
                         response = mess[-1]['content']
+                        prompt_idx_list = [j for j, m in enumerate(data['messages']) if m['role'] == 'user']
                         ans_file.write(json.dumps({
                             "question_id": data['question_id'],
                             "images": data['images'],
-                            "prompt": data['messages'][-1]['content'],
+                            "prompt": data['messages'][prompt_idx_list[-1 if args.prompt_last else 0]]['content'],
                             "model_response": response,
                             "gt_answer": data.get('answer', None),
                             "messages": mess,
@@ -226,10 +242,11 @@ def main(args):
                         remove_response = False
             else:
                 response = response.choices[0].message.content
+                prompt_idx_list = [j for j, m in enumerate(data['messages']) if m['role'] == 'user']
                 ans_file.write(json.dumps({
                     "question_id": data['question_id'],
                     "images": data['images'],
-                    "prompt": data['messages'][-1]['content'],
+                    "prompt": data['messages'][prompt_idx_list[-1 if args.prompt_last else 0]]['content'],
                     "model_response": response,
                     "gt_answer": data.get('answer', None),
                 }, ensure_ascii=False) + "\n")
@@ -243,6 +260,7 @@ if __name__ == "__main__":
     parser.add_argument("--question-file", type=str, required=True, help="问题文件路径")
     parser.add_argument("--answers-file", type=str, required=True, help="答案文件路径")
     parser.add_argument("--image-folder", type=str, default=None, help="图片文件夹路径，当图片不是绝对路径时使用")
+    parser.add_argument("--prompt-last", action='store_true', help="问题是否放在对话的最后一条消息中，默认为False")
 
     # 如果使用模型推理，则需要在脚本内部署后端
     parser.add_argument("--model-path", type=str, default=None, help="模型路径")
@@ -258,6 +276,8 @@ if __name__ == "__main__":
     parser.add_argument("--batch-size", type=int, default=64, help="批处理大小")
     parser.add_argument("--max-tokens", type=int, default=4096, help="最大token数，None则为 max_model_len - num_tokens")
     parser.add_argument("--temperature", type=float, default=1, help="温度参数，取值0~2，0表示贪心搜索，越大越随机")
+    parser.add_argument("--seed", type=int, default=None, help="随机种子，默认为None。为None时生成参数使用默认设置，因此温度可能失效导致完全确定性采样。给seed设置值之后会将生成参数的top_k和top_p设置为-1和1，以使温度能够控制随机采样结果。")
+    parser.add_argument("--ignore-origin-system", action='store_true', help="设为True则忽略数据集中原始的system，默认为False")
     parser.add_argument("--system", type=str, default="你是由浙江大学VIPA实验室开发的OmniPT多模态智能助手，用于辅助病理医生进行专业、准确、高效的诊断。你能够根据用户输入的图片和文字指令或问题，给出相应的回答。", help="系统提示词，传入则设置为该值")
     parser.add_argument("--think", action='store_true', help="是否使用思考模式，传入则设置为True")
     parser.add_argument("--think-system", type=str, default="在给出回答之前，你**必须**先在心里进行思考。将思考内容放在<think>和</think>之间，在</think>之后进行正式回答。对于有确定性答案的问题，如选择题和填空题等，在回答的最后，将选项或答案放在<answer>和</answer>之间。例如：<think>思考内容</think>正式回答内容和分析<answer>选项或回答短语</answer>", help="思考模式下的额外系统提示词，传入则设置为该值")

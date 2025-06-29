@@ -106,7 +106,7 @@ python zsxm_val/code/nips_eval/choice_eval.py \
   --result_file "$ANSWER_FILE" >> "$RES_FILE"
 
 # Perform per dataset evaluation
-DATASETS=("liverWSI" "HCC_grading" "ZheYi0607" "LiWeihan/Lung1000" "LiWeihan/Stomach1000")
+DATASETS=("liverWSI" "HCC_grading" "ZheYi0607/liver_cancer_thumbnails" "ZheYi0607/ICC_subtype_thumbnails" "RCC" "LiWeihan/Lung1000" "LiWeihan/Stomach1000")
 for DATASET in "${DATASETS[@]}"; do
   echo -e "\n—————————————————————————————————— $DATASET Performance ——————————————————————————————————" >> "$RES_FILE"
   python zsxm_val/code/nips_eval/choice_eval.py \

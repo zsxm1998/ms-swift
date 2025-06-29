@@ -12,7 +12,7 @@ from kfb.kfbreader import KFBSlide
 # --- 配置 ---
 WSI_MAPPING_FILE = 'wsi_mapping.json' # WSI 映射文件的路径
 CROP_COOR_FILE = 'crop_coordinate.json' # 从WSI局部获取的缩略图的crop坐标文件
-DEFAULT_PATCH_LEVEL = 1 # 默认读取的 WSI 层级，从0开始
+DEFAULT_PATCH_LEVEL = 2 # 默认读取的 WSI 层级，从0开始
 POINT_PATCH_SIZE = (28*18, 504) # 返回的 patch 的最大尺寸 (宽度, 高度)
 NORMALIZATION_RANGE = 1000 # 输入坐标的归一化范围 (0-1000)
 
@@ -163,17 +163,17 @@ def handle_highres_request(arguments, input_images, mode):
             break
         if mode == 'point':
             if slide_path not in crop_coor_map:
-                cx, cy = convert_normalized_to_level(coord, slide.level_dimensions[DEFAULT_PATCH_LEVEL])
+                cx, cy = convert_normalized_to_level(coord, slide.level_dimensions[min(DEFAULT_PATCH_LEVEL, slide.level_count-1)])
             else:
                 crop_x1, crop_y1, crop_x2, crop_y2 = crop_coor_map[slide_path]
-                coor_ratio = slide.level_downsamples[DEFAULT_PATCH_LEVEL] / slide.level_downsamples[0]
+                coor_ratio = slide.level_downsamples[min(DEFAULT_PATCH_LEVEL, slide.level_count-1)] / slide.level_downsamples[0]
                 crop_x1, crop_y1, crop_x2, crop_y2 = int(crop_x1/coor_ratio), int(crop_y1/coor_ratio), int(crop_x2/coor_ratio), int(crop_y2/coor_ratio)
                 cx, cy = convert_normalized_to_level(coord, (crop_x2-crop_x1, crop_y2-crop_y1))
                 cx, cy = cx + crop_x1, cy + crop_y1
             x, y = cx - POINT_PATCH_SIZE[0] // 2, cy - POINT_PATCH_SIZE[1] // 2
-            location = (min(max(0, x), slide.level_dimensions[DEFAULT_PATCH_LEVEL][0] - POINT_PATCH_SIZE[0]),
-                        min(max(0, y), slide.level_dimensions[DEFAULT_PATCH_LEVEL][1] - POINT_PATCH_SIZE[1])) # 基本边界检查
-            patch_image = read_region(slide, location, DEFAULT_PATCH_LEVEL, POINT_PATCH_SIZE, zero_level_loc=False)
+            location = (min(max(0, x), slide.level_dimensions[min(DEFAULT_PATCH_LEVEL, slide.level_count-1)][0] - POINT_PATCH_SIZE[0]),
+                        min(max(0, y), slide.level_dimensions[min(DEFAULT_PATCH_LEVEL, slide.level_count-1)][1] - POINT_PATCH_SIZE[1])) # 基本边界检查
+            patch_image = read_region(slide, location, min(DEFAULT_PATCH_LEVEL, slide.level_count-1), POINT_PATCH_SIZE, zero_level_loc=False)
         if mode == 'bbox':
             if slide_path not in crop_coor_map:
                 x1_0, y1_0, x2_0, y2_0 = convert_normalized_to_level(coord, slide.dimensions)

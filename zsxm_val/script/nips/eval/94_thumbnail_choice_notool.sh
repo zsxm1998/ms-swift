@@ -2,7 +2,7 @@
 
 # Check if the correct number of arguments is provided
 if [ "$#" -lt 1 ]; then
-  echo "Usage: $0 <CKPT_DIR> [-ng] [--think] [-tp <int>] [--batch-size <int>]"
+  echo "Usage: $0 <CKPT_DIR> [-ng] [--think] [--func] [-tp <int>] [--batch-size <int>]"
   exit 1
 fi
 
@@ -25,7 +25,7 @@ fi
 LOG_DIR="zsxm_val/results/nips/$CKPT_NAME"
 mkdir -p "$LOG_DIR"
 
-TASK_NAME="01_thumbnail_seg"
+TASK_NAME="94_thumbnail_choice_notool"
 RES_FILE="$LOG_DIR/$TASK_NAME.log"
 QUESTION_FILE="zsxm_dataset/nips/9_test/$TASK_NAME.json"
 ANSWER_FILE="$LOG_DIR/z$TASK_NAME.jsonl"
@@ -46,6 +46,10 @@ while [[ $# -gt 0 ]]; do
       THINK_FLAG=true
       shift
       ;;
+    --func)
+      FUNC_FLAG=true
+      shift
+      ;;
     -tp)
       TP_VALUE="$2"
       shift 2
@@ -60,9 +64,12 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Add think for ANSWER_FILE
+# Add think and func for ANSWER_FILE
 if [ -n "$THINK_FLAG" ]; then
   ANSWER_FILE="${ANSWER_FILE%.jsonl}_think.jsonl"
+fi
+if [ -n "$FUNC_FLAG" ]; then
+  ANSWER_FILE="${ANSWER_FILE%.jsonl}_func.jsonl"
 fi
 
 # Build Python arguments
@@ -76,6 +83,10 @@ PYTHON_ARGS=(
 if [ -n "$THINK_FLAG" ]; then
   PYTHON_ARGS+=(--think)
   RES_FILE="${RES_FILE%.log}_think.log"
+fi
+if [ -n "$FUNC_FLAG" ]; then
+  PYTHON_ARGS+=(--func)
+  RES_FILE="${RES_FILE%.log}_func.log"
 fi
 if [ -n "$TP_VALUE" ]; then
   PYTHON_ARGS+=(-tp "$TP_VALUE")
@@ -91,16 +102,15 @@ fi
 
 # Perform overall evaluation
 echo -e '—————————————————————————————————— Overall Performance ——————————————————————————————————' > "$RES_FILE"
-python zsxm_val/code/nips_eval/no_class_segmentation.py \
+python zsxm_val/code/nips_eval/choice_eval.py \
   --result_file "$ANSWER_FILE" >> "$RES_FILE"
 
 # Perform per dataset evaluation
-DATASETS=("liverWSI" "ICC_subtype" "HCC_grading" "ZheYi0607" "RCC" "CaiQiuyu/bladder" "CaiQiuyu/lung" "Prostate" "GBM_MGMT" "LiWeihan/Lung1000" "LiWeihan/Stomach1000")
+DATASETS=("liverWSI" "HCC_grading" "ZheYi0607" "LiWeihan/Lung1000" "LiWeihan/Stomach1000")
 for DATASET in "${DATASETS[@]}"; do
   echo -e "\n—————————————————————————————————— $DATASET Performance ——————————————————————————————————" >> "$RES_FILE"
-  python zsxm_val/code/nips_eval/no_class_segmentation.py \
+  python zsxm_val/code/nips_eval/choice_eval.py \
     --result_file "$ANSWER_FILE" \
     --gt_file "$QUESTION_FILE" \
-    --dataset "$DATASET" \
-    --vis_dir "$VIS_DIR/$DATASET" >> "$RES_FILE"
+    --dataset "$DATASET" >> "$RES_FILE"
 done

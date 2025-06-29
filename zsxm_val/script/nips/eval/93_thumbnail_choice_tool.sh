@@ -25,7 +25,7 @@ fi
 LOG_DIR="zsxm_val/results/nips/$CKPT_NAME"
 mkdir -p "$LOG_DIR"
 
-TASK_NAME="02_thumbnail_choice_additional"
+TASK_NAME="93_thumbnail_choice_tool"
 RES_FILE="$LOG_DIR/$TASK_NAME.log"
 QUESTION_FILE="zsxm_dataset/nips/9_test/$TASK_NAME.json"
 ANSWER_FILE="$LOG_DIR/z$TASK_NAME.jsonl"
@@ -106,7 +106,7 @@ python zsxm_val/code/nips_eval/choice_eval.py \
   --result_file "$ANSWER_FILE" >> "$RES_FILE"
 
 # Perform per dataset evaluation
-DATASETS=("HCC_grading" "ZheYi0607/liver_cancer_thumbnails" "ZheYi0607/ICC_subtype_thumbnails" "RCC")
+DATASETS=("liverWSI" "HCC_grading" "ZheYi0607" "LiWeihan/Lung1000" "LiWeihan/Stomach1000")
 for DATASET in "${DATASETS[@]}"; do
   echo -e "\n—————————————————————————————————— $DATASET Performance ——————————————————————————————————" >> "$RES_FILE"
   python zsxm_val/code/nips_eval/choice_eval.py \
