@@ -47,7 +47,7 @@ def magnify_wsi(inputs: List[Dict], target_url='http://127.0.0.1:18888/magnifyws
     for input in inputs:
         last_output = input['messages'][-1]['content']
         match = re.search(r'<function name="([a-zA-Z0-9_]+)">\s*(.*?)\s*</function>$', last_output, re.DOTALL)
-        if match and not any(m['role'] == 'tool' for m in input['messages']):
+        if match and sum(m['role'] == 'tool' for m in input['messages']) < 2:  # 限制tool最多在对话中出现2次（之前1次<2，和本次1次）
             # # 删除之前对话的思考过程
             # for mess in input['messages']:
             #     if mess['role'] == 'assistant':

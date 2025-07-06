@@ -615,7 +615,7 @@ class PathORM_Organ(PathORM):
             format_reward, acc_reward = 0., 0.
 
             # 计算各个类别的format_reward
-            if task_type in ['choice']:
+            if task_type in ['choice', 'choice_func']:
                 if think_format_with_suffix(content):
                     format_reward = 0.8
                     if think_format_no_suffix(content):
@@ -627,6 +627,8 @@ class PathORM_Organ(PathORM):
                     if content.count('<answer>') == 1 and content.count('</answer>') == 1 \
                         and content.index('<answer>') < content.index('</answer>'):
                         format_reward += 0.4
+                if task_type == 'choice_func' and not any(m['role'] == 'tool' for m in msgs) and format_reward > 0.5:
+                    format_reward = 0.5
             elif task_type in ['seg', 'det_no_class', 'det_with_class']:
                 format_reward = 0.1
                 if content.count(stag) == 1 and content.count(etag) == 1 \
@@ -636,13 +638,20 @@ class PathORM_Organ(PathORM):
                     format_reward = 1.0
                 elif check_other_task_tag_exist(content, self.stag_set, stag):
                     format_reward = 0.0
+            elif task_type in ['choice_nothink', 'choice_nothink_func']:
+                if '<think>' in content or '</think>' in content or '<answer>' in content or '</answer>' in content:
+                    format_reward = 0.0
+                else:
+                    format_reward = 1.0
+                if task_type == 'choice_nothink_func' and not any(m['role'] == 'tool' for m in msgs) and format_reward > 0.5:
+                    format_reward = 0.5
             else:
                 raise ValueError(f'task "{task_type}" not supported')
             
             # 计算各个类别的acc_reward
             try:
-                if format_reward > 0.5: # 只有格式符合基本要求才计算acc_reward
-                    if task_type in ['choice']:
+                if format_reward >= 0.5: # 只有格式符合基本要求才计算acc_reward
+                    if task_type in ['choice', 'choice_func']:
                         # 提取gt和content中的选项标签
                         gt_choice = extract_choice_label(gt) # 选项序号或False
                         content_answer = extract_between_tags(content, '<answer>', '</answer>')
@@ -695,7 +704,10 @@ class PathORM_Organ(PathORM):
                                 if img_keyword in img_root:
                                     gt_organ = organ
                                     break
-                            think_organ = infer_organ_from_text(extract_between_tags(content, '<think>', '</think>'))
+                            # think_organ = infer_organ_from_text(extract_between_tags(content, '<think>', '</think>'))
+                            think_organ = infer_organ_from_text(
+                                '\n'.join([m['content'] for m in msgs if m['role'] == 'assistant'] + [content])
+                            )
                             if think_organ=='unsure' or (gt_organ!=think_organ and 'unknown' not in [gt_organ, think_organ]):
                                 acc_reward -= 0.5
 
@@ -705,6 +717,22 @@ class PathORM_Organ(PathORM):
                             extract_between_tags(gt, stag, etag, include_tags=True, return_origin=True),
                             extract_between_tags(content, stag, etag, include_tags=True, return_origin=True)
                         )
+
+                    elif task_type in ['choice_nothink', 'choice_nothink_func']:
+                        # 提取gt和content中的选项标签
+                        gt_choice = extract_choice_label(gt) # 选项序号或False
+                        content_choice = extract_choice_label(content) # 选项序号或False
+
+                        # 若标签符合则赋予1.0的离散reward
+                        acc_reward = 0.0
+                        if gt_choice and content_choice and gt_choice == content_choice:
+                            acc_reward = 1.0
+                        elif not gt_choice and check_negative_exist(gt) \
+                            and not content_choice and check_negative_exist(content_answer):
+                            acc_reward = 1.0
+
+                    else:
+                        raise ValueError(f'Not implement acc reward for task "{task_type}"')
             except:
                 acc_reward = 0.0
 

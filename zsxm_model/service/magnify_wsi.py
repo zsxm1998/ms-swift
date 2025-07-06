@@ -15,6 +15,7 @@ CROP_COOR_FILE = 'crop_coordinate.json' # 从WSI局部获取的缩略图的crop�
 DEFAULT_PATCH_LEVEL = 2 # 默认读取的 WSI 层级，从0开始
 POINT_PATCH_SIZE = (28*18, 504) # 返回的 patch 的最大尺寸 (宽度, 高度)
 NORMALIZATION_RANGE = 1000 # 输入坐标的归一化范围 (0-1000)
+MAX_PATCH_NUMBER = 4 # 每次最多返回的 patch 数量
 
 app = Flask(__name__)
 
@@ -158,8 +159,8 @@ def handle_highres_request(arguments, input_images, mode):
     base64_images, content = [], ""
     for i, coord in enumerate(coords_list):
         # 最多5张图
-        if i >= 4:
-            content = "Too many patches requested, only the first 4 will be returned: "
+        if i >= MAX_PATCH_NUMBER:
+            content = f"Too many patches requested, only the first {MAX_PATCH_NUMBER} will be returned: "
             break
         if mode == 'point':
             if slide_path not in crop_coor_map:
