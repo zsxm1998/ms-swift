@@ -642,7 +642,7 @@ class GRPOTrainer(RLHFTrainerMixin, SwiftMixin, HFGRPOTrainer):
                 for idx, r in enumerate(results):
                     if r['finished'] or r['finish_reason'] == 'length':
                         messages_list[r['index']] = (r['messages'], r['finish_reason'],
-                                                     {k: r[k] for k in ['images','audios','videos'] if k in r}) # modified by zsxm
+                                                     {k: r[k] for k in ['images','audios','videos'] if k in r}) # modified by ZSXM
                 if len(inputs_slice) > 0:
                     _input_std = []
                     for _input in inputs_slice:
@@ -877,7 +877,18 @@ class GRPOTrainer(RLHFTrainerMixin, SwiftMixin, HFGRPOTrainer):
             else:
                 # Repeat all input columns (but "messages" and "completion") to match the number of generations
                 reward_kwargs = RowPreprocessor.rows_to_batched(inputs)
-                output_reward_func = reward_func(completions, **reward_kwargs)
+                if 'model' in inspect.signature(reward_func).parameters:
+                    if self.model.model_meta.is_multimodal:
+                        temp_models = self.template.remove_post_encode_hook()
+                    with unwrap_model_for_generation(
+                        self.model_wrapped, self.accelerator,
+                        gather_deepspeed3_params=self.args.ds3_gather_for_generation
+                    ) as unwrapped_model, self._template_context(self.template):
+                        output_reward_func = reward_func(completions, model=unwrapped_model, template=self.template, **reward_kwargs)
+                    if self.model.model_meta.is_multimodal:
+                        self.template.register_post_encode_hook(temp_models)
+                else:
+                    output_reward_func = reward_func(completions, **reward_kwargs)
                 rewards_per_func[:, i] = torch.tensor(output_reward_func, dtype=torch.float32, device=device)
 
         total_rewards_per_func = gather(rewards_per_func)
